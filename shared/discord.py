@@ -8,6 +8,7 @@ Follows self-healing philosophy: errors never block hook execution.
 
 import json
 import os
+import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -36,8 +37,8 @@ def get_webhook_url() -> Optional[str]:
             with open(env_file) as f:
                 for line in f:
                     line = line.strip()
-                    if line and not line.startswith('#') and '=' in line:
-                        key, value = line.split('=', 1)
+                    if line and not line.startswith("#") and "=" in line:
+                        key, value = line.split("=", 1)
                         if key.strip() == "DISCORD_WEBHOOK_URL":
                             return value.strip()
         except Exception:
@@ -76,21 +77,19 @@ def send_notification(
 
     try:
         # Build simple Discord payload: "🛑 `repo-name`"
-        payload = {
-            "content": f"{message} `{project}`"
-        }
+        payload = {"content": f"{message} `{project}`"}
 
         # Convert to JSON and encode
-        data = json.dumps(payload).encode('utf-8')
+        data = json.dumps(payload).encode("utf-8")
 
         # Create and send request
         req = urllib.request.Request(
             webhook_url,
             data=data,
             headers={
-                'Content-Type': 'application/json',
-                'User-Agent': 'Claude-Code-Hooks/1.0'
-            }
+                "Content-Type": "application/json",
+                "User-Agent": "Claude-Code-Hooks/1.0",
+            },
         )
 
         with urllib.request.urlopen(req, timeout=5) as response:

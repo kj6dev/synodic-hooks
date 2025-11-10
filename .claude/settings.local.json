@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat > /tmp/hook-input.json 2>&1"
+            "command": "$HOME/.claude/hooks/post_tool_use.py"
           }
         ]
       }

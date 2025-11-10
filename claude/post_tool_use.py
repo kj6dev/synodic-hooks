@@ -19,11 +19,11 @@ from hook_utils import (
     resolve_file_path,
     should_process_tool,
     format_hook_error,
-    EDIT_TOOLS
+    EDIT_TOOLS,
 )
 
 # Import formatter registry
-from formatters import get_formatter, get_supported_extensions
+from formatters import get_formatter
 
 
 def process_file(file_path: Path, project_dir: Path) -> bool:
@@ -64,14 +64,17 @@ def main():
 
         # Only process file edit operations
         if not should_process_tool(tool_name, EDIT_TOOLS):
-            print(f"🔍 DEBUG: Skipping tool {tool_name}, not in EDIT_TOOLS", file=sys.stderr)
+            print(
+                f"🔍 DEBUG: Skipping tool {tool_name}, not in EDIT_TOOLS",
+                file=sys.stderr,
+            )
             sys.exit(0)
 
         # Get files to process
-        file_paths = get_file_paths()
+        file_paths = get_file_paths(hook_data)
         print(f"🔍 DEBUG: file_paths={file_paths}", file=sys.stderr)
         if not file_paths:
-            print(f"🔍 DEBUG: No file paths found, exiting", file=sys.stderr)
+            print("🔍 DEBUG: No file paths found, exiting", file=sys.stderr)
             sys.exit(0)
 
         print("🔧 Running quality checks on modified files...")
@@ -101,7 +104,11 @@ def main():
         sys.exit(0)
 
     except Exception as e:
-        error_msg = format_hook_error("PostToolUse", e, f"Processing files for tool: {tool_name if 'tool_name' in locals() else 'unknown'}")
+        error_msg = format_hook_error(
+            "PostToolUse",
+            e,
+            f"Processing files for tool: {tool_name if 'tool_name' in locals() else 'unknown'}",
+        )
         print(error_msg, file=sys.stderr)
         # Exit 0 to avoid blocking workflow
         sys.exit(0)

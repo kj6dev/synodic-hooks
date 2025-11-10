@@ -20,5 +20,6 @@
         ]
       }
     ]
-  }
+  },
+  "disableAllHooks": false
 }

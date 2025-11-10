@@ -4,6 +4,7 @@ Notification Hook for Claude Code
 Plays a sound when Claude sends notifications
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -26,11 +27,10 @@ def main():
         play_sound(SOUND_SOSUMI)
 
         # Send Discord notification
-        project_dir = hook_data.get("project_dir", "Unknown")
+        project_dir = os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd())
         send_notification(
-            message="❓ Notification",
-            project=Path(project_dir).name if project_dir != "Unknown" else "Unknown",
-            hook_type="notification"
+            message="🔔",
+            project=Path(project_dir).name
         )
 
         # Could add custom logic here:

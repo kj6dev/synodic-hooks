@@ -21,8 +21,7 @@ addopts = [
     "--strict-markers",
     "--cov=shared",
     "--cov=claude",
-    "--cov-report=term-missing",
-    "--cov-report=html",
+    "--cov-report=term",
 ]
 
 [tool.coverage.run]

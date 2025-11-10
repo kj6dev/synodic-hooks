@@ -7,5 +7,18 @@
     ],
     "deny": [],
     "ask": []
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/post_tool_use.py"
+          }
+        ]
+      }
+    ]
   }
 }

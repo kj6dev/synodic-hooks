@@ -7,8 +7,9 @@ Routes file edits to appropriate formatters based on file type
 import sys
 from pathlib import Path
 
-# Add hooks directory to path for imports (resolve symlinks first)
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+# Add directories to path for imports (resolve symlinks first)
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # claude/ for hook_utils
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # root for formatters
 
 from hook_utils import (
     get_hook_data,
@@ -52,18 +53,25 @@ def process_file(file_path: Path, project_dir: Path) -> bool:
 
 def main():
     """Main entry point for PostToolUse hook"""
+    print("🔍 DEBUG: PostToolUse hook starting!", file=sys.stderr)
     try:
         # Read hook data
         hook_data = get_hook_data()
         tool_name = get_tool_name(hook_data)
 
+        # DEBUG: Print what we got
+        print(f"🔍 DEBUG: tool_name={tool_name}", file=sys.stderr)
+
         # Only process file edit operations
         if not should_process_tool(tool_name, EDIT_TOOLS):
+            print(f"🔍 DEBUG: Skipping tool {tool_name}, not in EDIT_TOOLS", file=sys.stderr)
             sys.exit(0)
 
         # Get files to process
         file_paths = get_file_paths()
+        print(f"🔍 DEBUG: file_paths={file_paths}", file=sys.stderr)
         if not file_paths:
+            print(f"🔍 DEBUG: No file paths found, exiting", file=sys.stderr)
             sys.exit(0)
 
         print("🔧 Running quality checks on modified files...")

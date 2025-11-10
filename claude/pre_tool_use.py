@@ -14,6 +14,7 @@ Self-healing: Blocks dangerous operations but provides clear guidance
 
 import re
 import shlex
+import subprocess
 import sys
 from pathlib import Path
 
@@ -79,13 +80,39 @@ def is_git_commit_command(command: str) -> bool:
     return False
 
 
+def is_initial_commit(repo_path: str) -> bool:
+    """
+    Check if this would be the first commit in the repository
+
+    Args:
+        repo_path: Path to git repository
+
+    Returns:
+        True if there are no commits yet (initial commit scenario)
+    """
+    try:
+        subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            cwd=repo_path,
+            timeout=5,
+            check=True
+        )
+        return False  # HEAD exists, so there are commits
+    except subprocess.CalledProcessError:
+        return True  # No HEAD, this is the initial commit
+    except Exception:
+        return False  # On error, assume not initial commit
+
+
 def validate_git_commit(command: str, cwd: str) -> tuple[bool, str]:
     """
     Validate git commit operation
 
     Enforces:
-    - Can only commit to claude/* branches
-    - Current branch must start with claude/
+    - Can only commit to claude/* branches (after initial commit)
+    - Initial commit allowed on any branch (repo bootstrap)
+    - Current branch must start with claude/ (after bootstrap)
 
     Args:
         command: Git commit command
@@ -103,7 +130,14 @@ def validate_git_commit(command: str, cwd: str) -> tuple[bool, str]:
         if not current_branch:
             return False, "Not in a git repository or detached HEAD state"
 
-        # Check if on claude/* branch
+        # Allow initial commit on any branch (repo bootstrap)
+        if is_initial_commit(cwd):
+            if current_branch == "develop":
+                return True, f"✅ Initial commit on develop - branch protection not enforced yet"
+            else:
+                return True, f"✅ Initial commit on {current_branch} - consider using 'develop' for initial commit"
+
+        # After initial commit, enforce branch protection
         if not is_claude_branch(current_branch, cwd):
             reason = (
                 f"🚨 Commits only allowed on claude/* branches!\n"

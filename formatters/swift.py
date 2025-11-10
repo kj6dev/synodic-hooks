@@ -8,7 +8,7 @@ from pathlib import Path
 
 # Import parent hook_utils
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from hook_utils import run_command
+from claude.hook_utils import run_command
 
 # Register this formatter
 from . import register_formatter

@@ -27,9 +27,8 @@ def main():
         # Send Discord notification
         project_dir = os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd())
         send_notification(
-            message="🛑 Stop",
-            project=Path(project_dir).name,
-            hook_type="stop"
+            message="🛑",
+            project=Path(project_dir).name
         )
 
         # Could add session cleanup logic here:

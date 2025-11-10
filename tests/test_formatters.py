@@ -77,7 +77,7 @@ class TestPythonFormatter:
         assert formatter is not None
 
     def test_formats_python_file(self, tmp_path):
-        """Should format Python files with ruff"""
+        """Should format Python files with uv + ruff"""
         # Create a test Python file
         test_file = tmp_path / "test.py"
         test_file.write_text("import os\nimport sys\n\n\ndef  test( ):\n    pass\n")
@@ -91,22 +91,24 @@ class TestPythonFormatter:
             # Run formatter
             result = formatter(test_file, tmp_path)
 
-            # Should have called ruff
+            # Should have called uv run ruff
             assert mock_run.called
             call_args = mock_run.call_args[0][0]
-            assert "ruff" in call_args[0] or call_args[0].endswith("ruff")
+            assert call_args[0] == "uv" or "uv" in call_args[0]
+            assert "ruff" in call_args
 
-    def test_handles_ruff_not_installed(self, tmp_path):
-        """Should handle missing ruff gracefully"""
+    def test_handles_uv_not_installed(self, tmp_path):
+        """Should handle missing uv gracefully"""
         test_file = tmp_path / "test.py"
         test_file.write_text("def test(): pass")
 
         formatter = get_formatter(test_file)
 
-        with patch("subprocess.run", side_effect=FileNotFoundError()):
+        # Mock command_exists in claude.hook_utils to return False for uv
+        with patch("claude.hook_utils.command_exists", return_value=False):
             result = formatter(test_file, tmp_path)
-            # Should return False but not crash
-            assert result is False
+            # Should return True (skip formatting) when uv not found
+            assert result is True
 
 
 class TestSwiftFormatter:
@@ -139,9 +141,11 @@ class TestSwiftFormatter:
 
         formatter = get_formatter(test_file)
 
-        with patch("subprocess.run", side_effect=FileNotFoundError()):
+        # Mock command_exists in claude.hook_utils to return False for all Swift tools
+        with patch("claude.hook_utils.command_exists", return_value=False):
             result = formatter(test_file, tmp_path)
-            assert result is False
+            # Swift formatter returns True even when tools missing (warnings only)
+            assert result is True
 
 
 class TestTypeScriptFormatter:
@@ -158,9 +162,13 @@ class TestTypeScriptFormatter:
         assert formatter is not None
 
     def test_formats_typescript_file(self, tmp_path):
-        """Should format TypeScript files"""
+        """Should format TypeScript files if package.json exists"""
         test_file = tmp_path / "test.ts"
         test_file.write_text("function test(){return true;}")
+
+        # Create package.json to indicate Node project
+        package_json = tmp_path / "package.json"
+        package_json.write_text("{}")
 
         formatter = get_formatter(test_file)
 
@@ -171,6 +179,21 @@ class TestTypeScriptFormatter:
 
             # Should have called prettier
             assert mock_run.called
+
+    def test_skips_formatting_without_package_json(self, tmp_path):
+        """Should skip formatting if no package.json (not a Node project)"""
+        test_file = tmp_path / "test.ts"
+        test_file.write_text("function test(){return true;}")
+
+        formatter = get_formatter(test_file)
+
+        with patch("subprocess.run") as mock_run:
+            result = formatter(test_file, tmp_path)
+
+            # Should not call prettier if no package.json
+            assert not mock_run.called
+            # Should still return True (skip silently)
+            assert result is True
 
 
 class TestJSONFormatter:

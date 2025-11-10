@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'PostToolUse hook fired!' >&2"
+            "command": "echo 'PostToolUse fired!' >> /tmp/hook-debug.log 2>&1"
           }
         ]
       }

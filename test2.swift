@@ -1,2 +1,2 @@
 import Foundation
-func test(){print("testing hooks")}
+func test(){print("testing echo hook")}

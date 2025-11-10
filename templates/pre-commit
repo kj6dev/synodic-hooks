@@ -1,0 +1,30 @@
+#!/bin/bash
+#
+# Pre-Commit Git Hook
+#
+# This hook runs before each commit to validate code quality.
+# Copy this file to your repository's .githooks/ directory.
+#
+# Setup:
+#   cp ~/.claude/hooks-repo/templates/pre-commit .githooks/pre-commit
+#   chmod +x .githooks/pre-commit
+#   git config core.hooksPath .githooks
+#
+# Bypass:
+#   git commit --no-verify
+#
+
+# Determine the synodic-hooks location
+# Adjust this path if your hooks are installed elsewhere
+HOOKS_REPO="${HOME}/.claude/hooks-repo"
+
+# Fallback to Developer location if symlink not set up yet
+if [ ! -d "$HOOKS_REPO" ]; then
+    HOOKS_REPO="${HOME}/Developer/SynodicClaude/synodic-hooks"
+fi
+
+# Run the pre-commit Python script
+python3 "${HOOKS_REPO}/git/pre_commit.py" --scope=staged-files
+
+# Exit with the same code as the Python script
+exit $?

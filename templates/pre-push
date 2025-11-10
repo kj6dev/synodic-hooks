@@ -1,0 +1,29 @@
+#!/bin/bash
+#
+# Pre-Push Git Hook
+#
+# This hook runs before each push to validate tests pass.
+# Copy this file to your repository's .githooks/ directory.
+#
+# Setup:
+#   cp ~/.claude/hooks-repo/templates/pre-push .githooks/pre-push
+#   chmod +x .githooks/pre-push
+#   git config core.hooksPath .githooks
+#
+# Bypass:
+#   git push --no-verify
+#
+
+# Determine the synodic-hooks location
+HOOKS_REPO="${HOME}/.claude/hooks-repo"
+
+# Fallback to Developer location if symlink not set up yet
+if [ ! -d "$HOOKS_REPO" ]; then
+    HOOKS_REPO="${HOME}/Developer/SynodicClaude/synodic-hooks"
+fi
+
+# Run the pre-push Python script
+python3 "${HOOKS_REPO}/git/pre_push.py"
+
+# Exit with the same code as the Python script
+exit $?

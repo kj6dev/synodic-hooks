@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__serena__list_dir",
+      "mcp__serena__initial_instructions",
+      "Bash(test:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

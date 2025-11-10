@@ -21,7 +21,7 @@ def create_unique_claude_branch(repo_path: Optional[str] = None) -> str:
     Returns:
         Created branch name (e.g., claude/20250108143022 or claude/20250108143022a)
     """
-    base_timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+    base_timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     branch_name = f"claude/{base_timestamp}"
 
     # Check for collision
@@ -38,7 +38,9 @@ def create_unique_claude_branch(repo_path: Optional[str] = None) -> str:
     return f"claude/{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
 
 
-def is_claude_branch(branch_name: Optional[str] = None, repo_path: Optional[str] = None) -> bool:
+def is_claude_branch(
+    branch_name: Optional[str] = None, repo_path: Optional[str] = None
+) -> bool:
     """
     Check if current or specified branch is a claude/* branch
 
@@ -87,7 +89,7 @@ def is_empty_claude_branch(branch_name: str, repo_path: Optional[str] = None) ->
                 capture_output=True,
                 text=True,
                 cwd=repo_path,
-                timeout=5
+                timeout=5,
             )
 
             if result.returncode == 0:
@@ -99,7 +101,7 @@ def is_empty_claude_branch(branch_name: str, repo_path: Optional[str] = None) ->
                     capture_output=True,
                     text=True,
                     cwd=repo_path,
-                    timeout=5
+                    timeout=5,
                 )
 
                 branch_head = result.stdout.strip()
@@ -108,6 +110,56 @@ def is_empty_claude_branch(branch_name: str, repo_path: Optional[str] = None) ->
                 return merge_base == branch_head
 
         # Couldn't find merge-base, assume not empty (safe default)
+        return False
+
+    except Exception:
+        return False
+
+
+def is_merged_claude_branch(branch_name: str, repo_path: Optional[str] = None) -> bool:
+    """
+    Check if a claude/* branch is fully merged to its base
+
+    Args:
+        branch_name: Branch to check
+        repo_path: Path to git repository
+
+    Returns:
+        True if branch is fully merged to develop/main/master
+    """
+    try:
+        # Try to check if merged to develop/main/master
+        for base in ["develop", "main", "master"]:
+            # Check if base branch exists
+            check_base = subprocess.run(
+                ["git", "rev-parse", "--verify", base],
+                capture_output=True,
+                text=True,
+                cwd=repo_path,
+                timeout=5,
+            )
+
+            if check_base.returncode != 0:
+                continue  # Base doesn't exist, try next one
+
+            # Check if branch is merged into base
+            result = subprocess.run(
+                ["git", "branch", "--merged", base],
+                capture_output=True,
+                text=True,
+                cwd=repo_path,
+                timeout=5,
+            )
+
+            if result.returncode == 0:
+                # Parse output to see if our branch is in the list
+                merged_branches = [
+                    b.strip().lstrip("* ") for b in result.stdout.strip().split("\n")
+                ]
+                if branch_name in merged_branches:
+                    return True
+
+        # Not merged to any base
         return False
 
     except Exception:

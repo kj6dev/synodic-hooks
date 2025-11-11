@@ -6,9 +6,8 @@ Runs when a Claude Code session starts or resumes.
 
 Responsibilities:
 1. Auto-create timestamped claude/* branches (if at repo root)
-2. Handle uncommitted changes from previous session
-3. Clean up empty claude/* branches
-4. Provide session context to user
+2. Clean up empty claude/* branches
+3. Provide session context to user
 
 Self-healing: Never blocks session start. All errors emit warnings only.
 """
@@ -26,7 +25,6 @@ from shared.hook_utils import format_hook_error, get_hook_data
 from session import (
     cleanup_empty_branches,
     create_session_branch,
-    handle_uncommitted_changes,
     report_session_context,
     should_auto_create_branch,
 )
@@ -54,14 +52,11 @@ def main():
         # 1. Clean up empty branches from previous sessions
         cleanup_empty_branches(cwd)
 
-        # 2. Handle uncommitted changes from previous session
-        handle_uncommitted_changes(cwd)
-
-        # 3. Create new session branch if appropriate
+        # 2. Create new session branch if appropriate
         if should_auto_create_branch(cwd):
             create_session_branch(cwd)
 
-        # 4. Report context
+        # 3. Report context
         report_session_context(cwd)
 
         # Always succeed

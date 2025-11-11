@@ -5,29 +5,30 @@ Processes user prompts before Claude sees them
 Can modify, log, or validate prompts
 """
 
+import json
 import sys
-from hook_utils import get_hook_data, format_hook_error
+from datetime import datetime
+from pathlib import Path
+
+from hook_utils import format_hook_error, get_hook_data
 
 
 def process_prompt(hook_data: dict) -> None:
     """
     Process user prompt before Claude receives it
 
-    Example uses:
-    - Log prompts for later analysis
-    - Add project-specific context automatically
-    - Validate prompt formatting
-    - Insert template expansions
+    Stores prompt for correlation with subsequent tool uses (Swift edits)
     """
-    # Get prompt text if available
-    user_message = hook_data.get("user_message", "")
+    prompt = hook_data.get("prompt", "")
+    session_id = hook_data.get("session_id", "")
 
-    # Could add logging here:
-    # with open(f"{os.environ['HOME']}/.claude/prompt_log.txt", "a") as f:
-    #     f.write(f"{datetime.now()}: {user_message}\n")
+    if not prompt or not session_id:
+        return
 
-    # Could modify prompt here (though this requires careful handling)
-    pass
+    # Store prompt with timestamp in session-specific cache
+    prompt_cache = Path.home() / f".claude-prompt-{session_id}.json"
+    with prompt_cache.open("w") as f:
+        json.dump({"timestamp": datetime.now().isoformat(), "prompt": prompt}, f)
 
 
 def main():

@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # Add current directory for local imports
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from hook_utils import get_hook_data, play_sound, format_hook_error, SOUND_SOSUMI
+from hook_utils import get_hook_data, format_hook_error
 from shared.discord import send_notification
 
 
@@ -23,15 +23,12 @@ def main():
         # Read hook data (for potential future use)
         hook_data = get_hook_data()
 
-        # Play notification sound
-        play_sound(SOUND_SOSUMI)
+        # Play notification sound (disabled - Discord notifications sufficient)
+        # play_sound(SOUND_SOSUMI)
 
         # Send Discord notification
         project_dir = os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd())
-        send_notification(
-            message="🔔",
-            project=Path(project_dir).name
-        )
+        send_notification(message="🔔", project=Path(project_dir).name)
 
         # Could add custom logic here:
         # - Log notifications to file

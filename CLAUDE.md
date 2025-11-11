@@ -1,5 +1,16 @@
 # Claude Code Hooks - Design Principles
 
+## Official Documentation
+
+**Always refer to the official Claude Code hooks documentation:**
+https://code.claude.com/docs/en/hooks
+
+This is the authoritative source for:
+- Hook types and their capabilities
+- Hook input/output data structures
+- Hook lifecycle and execution order
+- Best practices and examples
+
 ## Error Handling Philosophy
 
 ### Rich Error Messages Over Logging
@@ -133,3 +144,59 @@ This enables:
 7. **PreCompact** - Before context compaction (archive, save)
 8. **SessionStart** - Session initialization
 9. **SessionEnd** - Session finalization (save state, reports)
+
+## Swift Edit Logging
+
+### Purpose
+Captures all Swift file edits with user intent for future pattern analysis and skill development.
+
+### Implementation
+- **UserPromptSubmit**: Captures prompts to session-specific cache (`~/.claude-prompt-{session_id}.json`)
+- **PreToolUse**: Logs Swift edits to `~/Developer/swift-edits.yml` when Edit tool is used
+
+### What Gets Logged
+Only edits via the **Edit tool** on `.swift` files:
+- Timestamp
+- File path
+- User prompt (intent behind the edit)
+- Old code
+- New code
+
+**Not logged:**
+- Write tool (creating new Swift files)
+- NotebookEdit operations
+- Non-Swift files
+
+### Prompt Capture Strategy
+1. **Primary**: Session-specific cache (fast, clean)
+   - Written by UserPromptSubmit hook
+   - No multi-session conflicts
+2. **Fallback**: Transcript parsing (reliable)
+   - Reads conversation history
+   - Finds last user message
+
+### Output Format
+YAML with readable multi-line strings:
+```yaml
+---
+time: 2025-11-10T19:33:16.013728
+file: /path/to/ContentView.swift
+user_prompt: |
+  Extract the body into a computed property
+old: |
+  var body: some View {
+      VStack { ... }
+  }
+new: |
+  var body: some View {
+      content
+  }
+
+  private var content: some View { ... }
+```
+
+### Use Cases
+- Pattern detection for apple-platform-dev skill updates
+- Training data collection
+- Refactoring pattern analysis
+- Code quality metrics over time

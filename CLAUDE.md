@@ -143,6 +143,7 @@ This enables:
 
 **Claude Code Hooks**:
 - PostToolUse hook runs formatters after file edits
+- PreToolUse hook **blocks** bare `swiftlint`/`swiftformat` commands (enforces `-smart` usage)
 - Routes to appropriate formatter based on file extension
 - Uses compiled Swift binaries for Swift files (fast, native)
 - Uses Python + uv for Python files

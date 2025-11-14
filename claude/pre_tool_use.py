@@ -248,12 +248,48 @@ def validate_git_commit(command: str, cwd: str) -> tuple[bool, str]:
         return True, f"⚠️ Could not validate branch: {e}"
 
 
+def is_bare_swift_tool_command(command: str) -> tuple[bool, str]:
+    """
+    Check if command uses bare swiftlint/swiftformat instead of -smart versions
+
+    Args:
+        command: Bash command to check
+
+    Returns:
+        Tuple of (is_bare, tool_name)
+    """
+    # Parse command safely
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        return False, ""
+
+    if not tokens:
+        return False, ""
+
+    # Check first token (handles both bare command and paths like /usr/bin/swiftlint)
+    first_token = tokens[0]
+
+    # Bare swiftlint (but not swiftlint-smart)
+    if first_token.endswith("swiftlint") and not first_token.endswith("swiftlint-smart"):
+        return True, "swiftlint"
+
+    # Bare swiftformat (but not swiftformat-smart)
+    if first_token.endswith("swiftformat") and not first_token.endswith(
+        "swiftformat-smart"
+    ):
+        return True, "swiftformat"
+
+    return False, ""
+
+
 def validate_bash_command(hook_data: dict) -> bool:
     """
     Validate bash commands before execution
 
     Currently validates:
     - Git commit operations (must be on claude/* branch)
+    - Swift quality tools (must use -smart versions)
 
     Args:
         hook_data: Hook event data
@@ -266,6 +302,33 @@ def validate_bash_command(hook_data: dict) -> bool:
         return True  # Not a Bash command
 
     cwd = hook_data.get("cwd", ".")
+
+    # Check for bare Swift quality tools
+    is_bare, tool_name = is_bare_swift_tool_command(command)
+    if is_bare:
+        emit_error(f"🚨 Don't use bare '{tool_name}' - use '{tool_name}-smart' instead")
+        emit_error("")
+        emit_error("Why this matters:")
+        emit_error(
+            f"  • Bare '{tool_name}' uses SwiftLint defaults that REJECT trailing commas"
+        )
+        emit_error(
+            "  • swiftformat is configured to ADD trailing commas (modern Swift style)"
+        )
+        emit_error("  • This creates a conflict where the tools fight each other")
+        emit_error("")
+        emit_error(f"  • {tool_name}-smart automatically finds the correct config:")
+        emit_error("    1. Project-specific .swiftlint.yml/.swiftformat config")
+        emit_error(
+            "    2. Walks up directory tree to find config in parent directories"
+        )
+        emit_error(
+            "    3. Falls back to ~/Developer/swift-quality-tools/Configs/ (shared)"
+        )
+        emit_error("")
+        emit_error(f"Fix: Use {tool_name}-smart instead")
+        emit_error(f"  Available at: ~/Developer/swift-quality-tools/.build/release/")
+        return False
 
     # Check for git commit
     if is_git_commit_command(command):

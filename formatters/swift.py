@@ -18,6 +18,31 @@ from . import register_formatter
 SWIFT_TOOLS_PATH = Path.home() / "Developer" / "swift-quality-tools" / ".build" / "release"
 
 
+def add_violation_hints(output: str) -> list[str]:
+    """
+    Add helpful hints for specific violation types
+
+    Args:
+        output: Tool output containing violations
+
+    Returns:
+        List of hint messages to append
+    """
+    hints = []
+    output_lower = output.lower()
+
+    # Magic numbers hint
+    if "magic number" in output_lower or "no_magic_numbers" in output_lower:
+        hints.append("")
+        hints.append("💡 Tip: Use `enum Constants` at the top of the type declaration:")
+        hints.append("   enum Constants {")
+        hints.append("       static let maxRetries = 3")
+        hints.append("       static let timeout: TimeInterval = 30.0")
+        hints.append("   }")
+
+    return hints
+
+
 def run_lint_tool(tool_name: str, tool_path: Path, file_path: Path, project_dir: Path) -> bool:
     """
     Run a Swift lint/format tool and report violations as ERRORS
@@ -52,14 +77,22 @@ def run_lint_tool(tool_name: str, tool_path: Path, file_path: Path, project_dir:
             emit_error(f"LINT VIOLATIONS in {file_path.name} - {tool_name}")
             emit_error("=" * 60)
 
-            # Print all output as errors
+            # Collect all output
+            full_output = ""
             if result.stdout.strip():
+                full_output += result.stdout.strip()
                 for line in result.stdout.strip().split("\n"):
                     emit_error(line)
 
             if result.stderr.strip():
+                full_output += "\n" + result.stderr.strip()
                 for line in result.stderr.strip().split("\n"):
                     emit_error(line)
+
+            # Add context-specific hints
+            hints = add_violation_hints(full_output)
+            for hint in hints:
+                emit_error(hint)
 
             emit_error("=" * 60)
             emit_error(f"FIX THESE {tool_name} VIOLATIONS BEFORE PROCEEDING")

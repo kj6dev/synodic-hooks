@@ -51,6 +51,51 @@ Fix: [Actionable suggestion]
 - If you need historical pattern analysis
 - Start simple - add logging only if necessary
 
+### Lint Violations as Errors
+
+**Principle**: Report ALL lint violations as errors (not warnings) to ensure Claude's attention.
+
+**Rationale**:
+- Claude Code's attention mechanism prioritizes "errors" over "warnings"
+- Violations formatted as warnings often get ignored or deprioritized
+- Using `emit_error()` (🚨) ensures violations appear as critical issues requiring immediate attention
+
+**Implementation Pattern** (see `formatters/swift.py`):
+```python
+# Capture tool output and exit code
+result = subprocess.run([tool], capture_output=True, text=True)
+
+if result.returncode == 0:
+    emit_success(f"{tool_name} passed")
+else:
+    # Violations found - treat as ERRORS
+    emit_error(f"LINT VIOLATIONS in {file_name} - {tool_name}")
+    emit_error("=" * 60)
+
+    # Print all violation details as errors
+    for line in result.stdout.strip().split("\n"):
+        emit_error(line)
+
+    emit_error("=" * 60)
+    emit_error(f"FIX THESE {tool_name} VIOLATIONS BEFORE PROCEEDING")
+```
+
+**Output Format**:
+```
+🚨 LINT VIOLATIONS in MyFile.swift - SwiftLint
+🚨 ============================================================
+🚨 MyFile.swift:42:5: error: Line length exceeds 120 characters
+🚨 MyFile.swift:89:1: error: Trailing whitespace
+🚨 ============================================================
+🚨 FIX THESE SwiftLint VIOLATIONS BEFORE PROCEEDING
+```
+
+**Key Behaviors**:
+- Hook remains permissive (exits 0) to allow workflow continuation
+- All violation output uses `emit_error()` for maximum visibility
+- Clear separation bars and directive messages
+- File:line:column format for easy navigation
+
 ## Hook Architecture
 
 ### Modular Design with Registry Pattern

@@ -31,7 +31,7 @@ def track_swift_edits_and_suggest_batching(file_path: Path) -> None:
     """
     Track Swift file edits and suggest batch editing after threshold
 
-    Creates session-specific counter and shows hint once after 5 Swift edits.
+    Creates session-specific counter and shows hint once after 3 Swift edits.
     This helps Claude optimize workflow when fixing many violations.
     """
     if not file_path.suffix == ".swift":
@@ -52,8 +52,8 @@ def track_swift_edits_and_suggest_batching(file_path: Path) -> None:
         # Write updated count
         counter_file.write_text(str(count))
 
-        # Show hint once after 5 edits
-        if count == 5:
+        # Show hint once after 3 edits
+        if count == 3:
             print()
             print("💡 Performance Tip: Consider batch editing for similar changes")
             print(

@@ -151,7 +151,7 @@ This enables:
 - Future: Can add formatters for any language
 
 **Batch Editing Performance Hint**:
-- After 5 Swift file edits in a session, PostToolUse suggests batching
+- After 3 Swift file edits in a session, PostToolUse suggests batching
 - Shown once per session to avoid spam
 - Helps Claude optimize workflow when fixing many violations
 - Batching reduces hook overhead: 10 edits = 1 hook run vs 10 hook runs

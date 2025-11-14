@@ -75,27 +75,27 @@ def run_lint_tool(tool_name: str, tool_path: Path, file_path: Path, project_dir:
         else:
             # Violations found - treat as ERRORS
             emit_error(f"LINT VIOLATIONS in {file_path.name} - {tool_name}")
-            emit_error("=" * 60)
+            print("=" * 60)
 
             # Collect all output
             full_output = ""
             if result.stdout.strip():
                 full_output += result.stdout.strip()
                 for line in result.stdout.strip().split("\n"):
-                    emit_error(line)
+                    print(line)
 
             if result.stderr.strip():
                 full_output += "\n" + result.stderr.strip()
                 for line in result.stderr.strip().split("\n"):
-                    emit_error(line)
+                    print(line)
 
             # Add context-specific hints
             hints = add_violation_hints(full_output)
             for hint in hints:
                 emit_error(hint)
 
-            emit_error("=" * 60)
-            emit_error(f"FIX THESE {tool_name} VIOLATIONS BEFORE PROCEEDING")
+            print("=" * 60)
+            emit_error(f"Fix these {tool_name} violations")
             return False
 
     except subprocess.TimeoutExpired:

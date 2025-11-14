@@ -68,32 +68,39 @@ result = subprocess.run([tool], capture_output=True, text=True)
 if result.returncode == 0:
     emit_success(f"{tool_name} passed")
 else:
-    # Violations found - treat as ERRORS
+    # Violations found - use emit_error() for header/footer only
     emit_error(f"LINT VIOLATIONS in {file_name} - {tool_name}")
-    emit_error("=" * 60)
+    print("=" * 60)
 
-    # Print all violation details as errors
+    # Print violation details normally (readable for many violations)
     for line in result.stdout.strip().split("\n"):
-        emit_error(line)
+        print(line)
 
-    emit_error("=" * 60)
-    emit_error(f"FIX THESE {tool_name} VIOLATIONS BEFORE PROCEEDING")
+    # Add helpful hints as errors (actionable guidance)
+    hints = add_violation_hints(result.stdout)
+    for hint in hints:
+        emit_error(hint)
+
+    print("=" * 60)
+    emit_error(f"Fix these {tool_name} violations")
 ```
 
 **Output Format**:
 ```
 🚨 LINT VIOLATIONS in MyFile.swift - SwiftLint
-🚨 ============================================================
-🚨 MyFile.swift:42:5: error: Line length exceeds 120 characters
-🚨 MyFile.swift:89:1: error: Trailing whitespace
-🚨 ============================================================
-🚨 FIX THESE SwiftLint VIOLATIONS BEFORE PROCEEDING
+============================================================
+MyFile.swift:42:5: error: Line length exceeds 120 characters
+MyFile.swift:89:1: error: Trailing whitespace
+🚨 💡 Tip: Use `enum Constants` at the top of the type declaration
+============================================================
+🚨 Fix these SwiftLint violations
 ```
 
 **Key Behaviors**:
 - Hook remains permissive (exits 0) to allow workflow continuation
-- All violation output uses `emit_error()` for maximum visibility
-- Clear separation bars and directive messages
+- Header/footer use `emit_error()` to trigger Claude's error attention mechanism
+- Violation lines print normally for readability (not overwhelming with 50+ violations)
+- Context-specific hints use `emit_error()` for visibility
 - File:line:column format for easy navigation
 
 ## Hook Architecture

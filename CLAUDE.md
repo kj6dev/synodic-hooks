@@ -143,11 +143,18 @@ This enables:
 
 **Claude Code Hooks**:
 - PostToolUse hook runs formatters after file edits
+- PostToolUse hook suggests batch editing after 5 Swift file edits (performance optimization)
 - PreToolUse hook **blocks** bare `swiftlint`/`swiftformat` commands (enforces `-smart` usage)
 - Routes to appropriate formatter based on file extension
 - Uses compiled Swift binaries for Swift files (fast, native)
 - Uses Python + uv for Python files
 - Future: Can add formatters for any language
+
+**Batch Editing Performance Hint**:
+- After 5 Swift file edits in a session, PostToolUse suggests batching
+- Shown once per session to avoid spam
+- Helps Claude optimize workflow when fixing many violations
+- Batching reduces hook overhead: 10 edits = 1 hook run vs 10 hook runs
 
 **Xcode Build Phases**:
 - Swift quality tools can be called from Xcode build scripts

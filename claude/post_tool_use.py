@@ -4,6 +4,7 @@ PostToolUse Hook for Claude Code
 Routes file edits to appropriate formatters based on file type
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -24,6 +25,49 @@ from hook_utils import (
 
 # Import formatter registry
 from formatters import get_formatter
+
+
+def track_swift_edits_and_suggest_batching(file_path: Path) -> None:
+    """
+    Track Swift file edits and suggest batch editing after threshold
+
+    Creates session-specific counter and shows hint once after 5 Swift edits.
+    This helps Claude optimize workflow when fixing many violations.
+    """
+    if not file_path.suffix == ".swift":
+        return
+
+    # Get session ID from environment (set by Claude Code)
+    session_id = os.environ.get("CLAUDE_SESSION_ID", "default")
+    counter_file = Path.home() / f".claude-swift-edits-{session_id}.count"
+
+    try:
+        # Read current count
+        count = 0
+        if counter_file.exists():
+            count = int(counter_file.read_text().strip())
+
+        count += 1
+
+        # Write updated count
+        counter_file.write_text(str(count))
+
+        # Show hint once after 5 edits
+        if count == 5:
+            print()
+            print("💡 Performance Tip: Consider batch editing for similar changes")
+            print(
+                "   Hooks run after every Edit - batching multiple files into one Edit"
+            )
+            print("   operation reduces hook overhead significantly.")
+            print()
+            print("   Example: Instead of editing 10 files individually,")
+            print('   ask me to "batch edit all files to fix trailing whitespace"')
+            print()
+
+    except (ValueError, OSError):
+        # Silently fail - this is just a helpful hint
+        pass
 
 
 def process_file(file_path: Path, project_dir: Path) -> bool:
@@ -82,6 +126,9 @@ def main():
                 continue
 
             try:
+                # Track Swift edits and suggest batching if appropriate
+                track_swift_edits_and_suggest_batching(file_path)
+
                 success = process_file(file_path, project_dir)
                 all_success = all_success and success
             except Exception as e:

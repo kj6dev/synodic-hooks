@@ -64,7 +64,7 @@ def parse_session_file(session_file: Path) -> dict[str, Any]:
         session_file: Path to session .yml file
 
     Returns:
-        Dict with session metadata and edits
+        Dict with session metadata, edits, and commits (Phase 4)
     """
     with session_file.open("r") as f:
         lines = f.readlines()
@@ -73,10 +73,12 @@ def parse_session_file(session_file: Path) -> dict[str, Any]:
         "file": str(session_file),
         "metadata": {},
         "edits": [],
+        "commits": [],  # Phase 4
     }
 
     i = 0
     current_edit = None
+    current_commit = None
 
     while i < len(lines):
         line = lines[i].rstrip()
@@ -91,15 +93,40 @@ def parse_session_file(session_file: Path) -> dict[str, Any]:
         elif "branch:" in line:
             session_data["metadata"]["branch"] = line.split(":", 1)[1].strip()
 
+        # Commit entries (Phase 4)
+        elif line.startswith("commit_sha:"):
+            # Save previous commit if exists
+            if current_commit:
+                session_data["commits"].append(current_commit)
+
+            current_commit = {
+                "sha": line.split(":", 1)[1].strip(),
+                "time": "",
+                "message": "",
+            }
+
+        elif current_commit and line.startswith("commit_time:"):
+            current_commit["time"] = line.split(":", 1)[1].strip()
+
+        elif current_commit and line.startswith("commit_message: |"):
+            value, next_i = parse_yaml_value(lines, i)
+            current_commit["message"] = value
+            i = next_i - 1
+
         # Edit entries
         elif line.startswith("time:"):
             # Save previous edit if exists
             if current_edit:
                 session_data["edits"].append(current_edit)
+            # Save previous commit if exists
+            if current_commit:
+                session_data["commits"].append(current_commit)
+                current_commit = None
 
             current_edit = {
                 "time": line.split(":", 1)[1].strip(),
                 "file": "",
+                "change_type": "unknown",  # Phase 4
                 "user_prompt": "",
                 "old": "",
                 "new": "",
@@ -107,6 +134,9 @@ def parse_session_file(session_file: Path) -> dict[str, Any]:
 
         elif current_edit and line.startswith("file:"):
             current_edit["file"] = line.split(":", 1)[1].strip()
+
+        elif current_edit and line.startswith("change_type:"):  # Phase 4
+            current_edit["change_type"] = line.split(":", 1)[1].strip()
 
         elif current_edit and line.startswith("user_prompt: |"):
             value, next_i = parse_yaml_value(lines, i)
@@ -125,9 +155,11 @@ def parse_session_file(session_file: Path) -> dict[str, Any]:
 
         i += 1
 
-    # Don't forget last edit
+    # Don't forget last edit/commit
     if current_edit:
         session_data["edits"].append(current_edit)
+    if current_commit:
+        session_data["commits"].append(current_commit)
 
     return session_data
 
@@ -177,11 +209,12 @@ def build_index(sessions_dir: Path) -> dict[str, Any]:
         Index dictionary
     """
     index = {
-        "version": "1.0",
+        "version": "2.0",  # Phase 4
         "generated": datetime.now().isoformat(),
         "sessions": {},
         "by_file": {},
         "by_symbol": {},
+        "by_change_type": {},  # Phase 4
     }
 
     # Find all session files
@@ -200,12 +233,14 @@ def build_index(sessions_dir: Path) -> dict[str, Any]:
 
         session_id = session_data["metadata"].get("session_id", session_file.stem)
 
-        # Add to sessions index
+        # Add to sessions index (Phase 4: include commits)
         index["sessions"][session_id] = {
             "file": session_file.name,
             "started": session_data["metadata"].get("started", ""),
             "branch": session_data["metadata"].get("branch", ""),
             "edit_count": len(session_data["edits"]),
+            "commit_count": len(session_data["commits"]),  # Phase 4
+            "commits": session_data["commits"],  # Phase 4
             "files_modified": [],
         }
 
@@ -271,9 +306,21 @@ def build_index(sessions_dir: Path) -> dict[str, Any]:
                         "time": edit_time,
                     })
 
+            # Index by change type (Phase 4)
+            change_type = edit.get("change_type", "unknown")
+            if change_type not in index["by_change_type"]:
+                index["by_change_type"][change_type] = []
+
+            index["by_change_type"][change_type].append({
+                "session": session_id,
+                "file": file_path,
+                "time": edit_time,
+            })
+
     print(f"\n✅ Indexed {len(index['sessions'])} sessions")
     print(f"   - {len(index['by_file'])} files modified")
     print(f"   - {len(index['by_symbol'])} symbols tracked")
+    print(f"   - {len(index['by_change_type'])} change types recorded")
 
     return index
 

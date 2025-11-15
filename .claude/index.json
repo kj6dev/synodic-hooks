@@ -1,0 +1,107 @@
+{
+  "version": "2.0",
+  "generated": "2025-11-15T11:02:09.714806",
+  "sessions": {
+    "claude-20251115-103341": {
+      "file": "20251115-103341.yml",
+      "started": "2025-11-15T10:33:41.611405",
+      "branch": "claude/20251109214216",
+      "edit_count": 10,
+      "commit_count": 0,
+      "commits": [],
+      "files_modified": [
+        "/Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py",
+        "/Users/bryancostanza/Developer/synodic-hooks/claude/pre_tool_use.py",
+        "/Users/bryancostanza/Developer/synodic-hooks/tools/edit-log-indexer.py"
+      ]
+    }
+  },
+  "by_file": {
+    "/Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py": [
+      {
+        "session": "claude-20251115-103341",
+        "edit_times": [
+          "2025-11-15T10:33:41.611902",
+          "2025-11-15T10:34:36.585451",
+          "2025-11-15T10:59:00.445267",
+          "2025-11-15T11:01:15.461964"
+        ]
+      }
+    ],
+    "/Users/bryancostanza/Developer/synodic-hooks/claude/pre_tool_use.py": [
+      {
+        "session": "claude-20251115-103341",
+        "edit_times": [
+          "2025-11-15T10:35:20.734447",
+          "2025-11-15T10:35:46.407510"
+        ]
+      }
+    ],
+    "/Users/bryancostanza/Developer/synodic-hooks/tools/edit-log-indexer.py": [
+      {
+        "session": "claude-20251115-103341",
+        "edit_times": [
+          "2025-11-15T10:36:42.823873",
+          "2025-11-15T10:36:59.340075",
+          "2025-11-15T10:41:21.661474",
+          "2025-11-15T10:41:48.089896"
+        ]
+      }
+    ]
+  },
+  "by_symbol": {},
+  "by_change_type": {
+    "unknown": [
+      {
+        "session": "claude-20251115-103341",
+        "file": "/Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py",
+        "time": "2025-11-15T10:33:41.611902"
+      },
+      {
+        "session": "claude-20251115-103341",
+        "file": "/Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py",
+        "time": "2025-11-15T10:34:36.585451"
+      },
+      {
+        "session": "claude-20251115-103341",
+        "file": "/Users/bryancostanza/Developer/synodic-hooks/claude/pre_tool_use.py",
+        "time": "2025-11-15T10:35:20.734447"
+      },
+      {
+        "session": "claude-20251115-103341",
+        "file": "/Users/bryancostanza/Developer/synodic-hooks/claude/pre_tool_use.py",
+        "time": "2025-11-15T10:35:46.407510"
+      },
+      {
+        "session": "claude-20251115-103341",
+        "file": "/Users/bryancostanza/Developer/synodic-hooks/tools/edit-log-indexer.py",
+        "time": "2025-11-15T10:36:42.823873"
+      },
+      {
+        "session": "claude-20251115-103341",
+        "file": "/Users/bryancostanza/Developer/synodic-hooks/tools/edit-log-indexer.py",
+        "time": "2025-11-15T10:36:59.340075"
+      },
+      {
+        "session": "claude-20251115-103341",
+        "file": "/Users/bryancostanza/Developer/synodic-hooks/tools/edit-log-indexer.py",
+        "time": "2025-11-15T10:41:21.661474"
+      },
+      {
+        "session": "claude-20251115-103341",
+        "file": "/Users/bryancostanza/Developer/synodic-hooks/tools/edit-log-indexer.py",
+        "time": "2025-11-15T10:41:48.089896"
+      },
+      {
+        "session": "claude-20251115-103341",
+        "file": "/Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py",
+        "time": "2025-11-15T10:59:00.445267"
+      },
+      {
+        "session": "claude-20251115-103341",
+        "file": "/Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py",
+        "time": "2025-11-15T11:01:15.461964"
+      }
+    ]
+  }
+}

@@ -220,16 +220,68 @@ def write_session_metadata(session_file: Path, metadata: dict) -> None:
         f.write("---\n\n")
 
 
+def classify_change_type(user_prompt: str, file_path: str, old_code: str, new_code: str) -> str:
+    """
+    Classify the type of change being made (Phase 4)
+
+    Args:
+        user_prompt: User's request
+        file_path: File being edited
+        old_code: Old code
+        new_code: New code
+
+    Returns:
+        Change type: refactor, bugfix, feature, docs, style, test, or unknown
+    """
+    prompt_lower = user_prompt.lower()
+    file_lower = file_path.lower()
+
+    # Documentation changes
+    if (".md" in file_lower or "readme" in file_lower or "changelog" in file_lower):
+        return "docs"
+
+    # Test changes
+    if ("test" in file_lower or "spec" in file_lower):
+        return "test"
+
+    # Bug fixes (check prompt keywords)
+    bug_keywords = ["fix", "bug", "error", "crash", "issue", "broken", "repair"]
+    if any(keyword in prompt_lower for keyword in bug_keywords):
+        return "bugfix"
+
+    # Refactoring (check prompt keywords)
+    refactor_keywords = [
+        "refactor", "extract", "rename", "move", "reorganize",
+        "clean up", "simplify", "reduce", "dependency"
+    ]
+    if any(keyword in prompt_lower for keyword in refactor_keywords):
+        return "refactor"
+
+    # Style/formatting
+    style_keywords = ["format", "style", "lint", "whitespace", "indent"]
+    if any(keyword in prompt_lower for keyword in style_keywords):
+        return "style"
+
+    # Features (check for new functionality)
+    feature_keywords = ["add", "new", "create", "implement", "feature"]
+    # But exclude "add comment" type changes
+    if any(keyword in prompt_lower for keyword in feature_keywords):
+        if "comment" not in prompt_lower and "doc" not in prompt_lower:
+            return "feature"
+
+    # Default
+    return "unknown"
+
+
 def log_file_edit(hook_data: dict) -> None:
     """
     Log file edits to per-repo session YAML files for pattern analysis
 
-    New behavior (Phase 1):
-    - Logs ALL text file edits (not just Swift)
-    - Detects git repos and logs to .claude/sessions/SESSION_ID.yml
-    - Falls back to global log if not in git repo
-    - Implements filtering (size limits, exclude patterns)
-    - Adds session metadata (session_id, repo, branch)
+    Behavior:
+    - Phase 1: Logs ALL text file edits to per-repo session files
+    - Phase 1: Implements filtering (size limits, exclude patterns)
+    - Phase 1: Adds session metadata (session_id, repo, branch)
+    - Phase 4: Adds change type classification
     """
     try:
         tool_name = get_tool_name(hook_data)
@@ -308,12 +360,16 @@ def log_file_edit(hook_data: dict) -> None:
                 except Exception:
                     pass
 
+        # Classify change type (Phase 4)
+        change_type = classify_change_type(user_prompt, file_path, old_string, new_string)
+
         # Write YAML entry (append to session file)
         with log_file.open("a") as f:
             f.write("---\n")
             f.write(f"# Edit {datetime.now().isoformat()}\n")
             f.write(f"time: {datetime.now().isoformat()}\n")
             f.write(f"file: {file_path}\n")
+            f.write(f"change_type: {change_type}\n")
             if user_prompt:
                 f.write("user_prompt: |\n")
                 for line in user_prompt.splitlines():

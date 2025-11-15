@@ -1,0 +1,782 @@
+---
+# Session Metadata
+session_id: claude-20251115-103341
+started: 2025-11-15T10:33:41.611405
+repo: /Users/bryancostanza/Developer/synodic-hooks
+branch: claude/20251109214216
+edit_count: 0
+---
+
+---
+# Edit 2025-11-15T10:33:41.611899
+time: 2025-11-15T10:33:41.611902
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py
+user_prompt: |
+  do 4
+old: |
+  #!/usr/bin/env python3
+  """
+  PostToolUse Hook for Claude Code
+  Routes file edits to appropriate formatters based on file type
+  """
+  
+  import os
+  import sys
+  from pathlib import Path
+  
+  # Add directories to path for imports (resolve symlinks first)
+  sys.path.insert(0, str(Path(__file__).resolve().parent))  # claude/ for hook_utils
+  sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # root for formatters
+  
+  from hook_utils import (
+      get_hook_data,
+      get_tool_name,
+      get_file_paths,
+      get_project_dir,
+      resolve_file_path,
+      should_process_tool,
+      format_hook_error,
+      EDIT_TOOLS,
+  )
+  
+  # Import formatter registry
+  from formatters import get_formatter
+new: |
+  #!/usr/bin/env python3
+  """
+  PostToolUse Hook for Claude Code
+  Routes file edits to appropriate formatters based on file type
+  Tracks git commits for session metadata (Phase 4)
+  """
+  
+  import json
+  import os
+  import re
+  import shlex
+  import subprocess
+  import sys
+  from datetime import datetime
+  from pathlib import Path
+  
+  # Add directories to path for imports (resolve symlinks first)
+  sys.path.insert(0, str(Path(__file__).resolve().parent))  # claude/ for hook_utils
+  sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # root for formatters
+  
+  from hook_utils import (
+      get_hook_data,
+      get_tool_name,
+      get_file_paths,
+      get_project_dir,
+      resolve_file_path,
+      should_process_tool,
+      format_hook_error,
+      EDIT_TOOLS,
+  )
+  
+  # Import formatter registry
+  from formatters import get_formatter
+
+---
+# Edit 2025-11-15T10:34:36.585440
+time: 2025-11-15T10:34:36.585451
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py
+user_prompt: |
+  do 4
+old: |
+  def main():
+      """Main entry point for PostToolUse hook"""
+      try:
+          # Read hook data
+          hook_data = get_hook_data()
+          tool_name = get_tool_name(hook_data)
+  
+          # Only process file edit operations
+          if not should_process_tool(tool_name, EDIT_TOOLS):
+              sys.exit(0)
+new: |
+  def is_git_commit_command(command: str) -> bool:
+      """
+      Detect if a bash command is a git commit operation
+  
+      Args:
+          command: Bash command string
+  
+      Returns:
+          True if this is a git commit operation
+      """
+      try:
+          tokens = shlex.split(command)
+      except ValueError:
+          return bool(re.search(r"\bgit\b.*\bcommit\b", command))
+  
+      if len(tokens) < 2:
+          return False
+  
+      if not tokens[0].endswith("git"):
+          return False
+  
+      # Find first non-flag token after 'git'
+      skip_next = False
+      for token in tokens[1:]:
+          if skip_next:
+              skip_next = False
+              continue
+          if token.startswith("-"):
+              if token in ["-C", "-c", "--git-dir", "--work-tree"]:
+                  skip_next = True
+              continue
+          return token == "commit"
+  
+      return False
+  
+  
+  def find_git_root(cwd: str) -> Path | None:
+      """
+      Find the git repository root
+  
+      Args:
+          cwd: Current working directory
+  
+      Returns:
+          Path to git root, or None if not in a git repo
+      """
+      try:
+          result = subprocess.run(
+              ["git", "rev-parse", "--show-toplevel"],
+              capture_output=True,
+              text=True,
+              cwd=cwd,
+              timeout=5,
+          )
+          if result.returncode == 0:
+              return Path(result.stdout.strip())
+      except Exception:
+          pass
+  
+      return None
+  
+  
+  def record_commit_to_session(cwd: str) -> None:
+      """
+      Record the latest commit to the current session file
+  
+      Called after a git commit command succeeds.
+      Appends commit metadata to the session file.
+  
+      Args:
+          cwd: Current working directory (repo)
+      """
+      try:
+          # Find git root
+          git_root = find_git_root(cwd)
+          if not git_root:
+              return
+  
+          # Check if session file exists
+          claude_dir = git_root / ".claude"
+          current_session_file = claude_dir / "current_session"
+  
+          if not current_session_file.exists():
+              return  # No active session
+  
+          # Read session ID
+          session_id = current_session_file.read_text().strip()
+  
+          # Get session file
+          session_filename = session_id.replace("claude-", "") + ".yml"
+          session_file = claude_dir / "sessions" / session_filename
+  
+          if not session_file.exists():
+              return  # Session file doesn't exist
+  
+          # Get latest commit info
+          result = subprocess.run(
+              ["git", "log", "-1", "--format=%H%n%s%n%ai"],
+              capture_output=True,
+              text=True,
+              cwd=str(git_root),
+              timeout=5,
+          )
+  
+          if result.returncode != 0:
+              return  # Couldn't get commit info
+  
+          lines = result.stdout.strip().split("\n")
+          if len(lines) < 3:
+              return
+  
+          commit_sha = lines[0]
+          commit_message = lines[1]
+          commit_time = lines[2]
+  
+          # Append commit record to session file
+          with session_file.open("a") as f:
+              f.write("---\n")
+              f.write(f"# Commit {commit_sha[:8]}\n")
+              f.write(f"commit_sha: {commit_sha}\n")
+              f.write(f"commit_time: {commit_time}\n")
+              f.write("commit_message: |\n")
+              for line in commit_message.splitlines():
+                  f.write(f"  {line}\n")
+              f.write("\n")
+  
+      except Exception:
+          # Silent failure - don't block workflow
+          pass
+  
+  
+  def main():
+      """Main entry point for PostToolUse hook"""
+      try:
+          # Read hook data
+          hook_data = get_hook_data()
+          tool_name = get_tool_name(hook_data)
+  
+          # Handle git commit tracking (Phase 4)
+          if tool_name == "Bash":
+              tool_input = hook_data.get("tool_input", {})
+              command = tool_input.get("command", "")
+              cwd = hook_data.get("cwd", ".")
+  
+              if is_git_commit_command(command):
+                  record_commit_to_session(cwd)
+  
+              # Don't process Bash commands for formatting
+              sys.exit(0)
+  
+          # Only process file edit operations
+          if not should_process_tool(tool_name, EDIT_TOOLS):
+              sys.exit(0)
+
+---
+# Edit 2025-11-15T10:35:20.734436
+time: 2025-11-15T10:35:20.734447
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/pre_tool_use.py
+user_prompt: |
+  do 4
+old: |
+  def log_file_edit(hook_data: dict) -> None:
+      """
+      Log file edits to per-repo session YAML files for pattern analysis
+  
+      New behavior (Phase 1):
+      - Logs ALL text file edits (not just Swift)
+      - Detects git repos and logs to .claude/sessions/SESSION_ID.yml
+      - Falls back to global log if not in git repo
+      - Implements filtering (size limits, exclude patterns)
+      - Adds session metadata (session_id, repo, branch)
+      """
+new: |
+  def classify_change_type(user_prompt: str, file_path: str, old_code: str, new_code: str) -> str:
+      """
+      Classify the type of change being made (Phase 4)
+  
+      Args:
+          user_prompt: User's request
+          file_path: File being edited
+          old_code: Old code
+          new_code: New code
+  
+      Returns:
+          Change type: refactor, bugfix, feature, docs, style, test, or unknown
+      """
+      prompt_lower = user_prompt.lower()
+      file_lower = file_path.lower()
+  
+      # Documentation changes
+      if (".md" in file_lower or "readme" in file_lower or "changelog" in file_lower):
+          return "docs"
+  
+      # Test changes
+      if ("test" in file_lower or "spec" in file_lower):
+          return "test"
+  
+      # Bug fixes (check prompt keywords)
+      bug_keywords = ["fix", "bug", "error", "crash", "issue", "broken", "repair"]
+      if any(keyword in prompt_lower for keyword in bug_keywords):
+          return "bugfix"
+  
+      # Refactoring (check prompt keywords)
+      refactor_keywords = [
+          "refactor", "extract", "rename", "move", "reorganize",
+          "clean up", "simplify", "reduce", "dependency"
+      ]
+      if any(keyword in prompt_lower for keyword in refactor_keywords):
+          return "refactor"
+  
+      # Style/formatting
+      style_keywords = ["format", "style", "lint", "whitespace", "indent"]
+      if any(keyword in prompt_lower for keyword in style_keywords):
+          return "style"
+  
+      # Features (check for new functionality)
+      feature_keywords = ["add", "new", "create", "implement", "feature"]
+      # But exclude "add comment" type changes
+      if any(keyword in prompt_lower for keyword in feature_keywords):
+          if "comment" not in prompt_lower and "doc" not in prompt_lower:
+              return "feature"
+  
+      # Default
+      return "unknown"
+  
+  
+  def log_file_edit(hook_data: dict) -> None:
+      """
+      Log file edits to per-repo session YAML files for pattern analysis
+  
+      Behavior:
+      - Phase 1: Logs ALL text file edits to per-repo session files
+      - Phase 1: Implements filtering (size limits, exclude patterns)
+      - Phase 1: Adds session metadata (session_id, repo, branch)
+      - Phase 4: Adds change type classification
+      """
+
+---
+# Edit 2025-11-15T10:35:46.407500
+time: 2025-11-15T10:35:46.407510
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/pre_tool_use.py
+user_prompt: |
+  do 4
+old: |
+          # Write YAML entry (append to session file)
+          with log_file.open("a") as f:
+              f.write("---\n")
+              f.write(f"# Edit {datetime.now().isoformat()}\n")
+              f.write(f"time: {datetime.now().isoformat()}\n")
+              f.write(f"file: {file_path}\n")
+              if user_prompt:
+                  f.write("user_prompt: |\n")
+                  for line in user_prompt.splitlines():
+                      f.write(f"  {line}\n")
+              f.write("old: |\n")
+              for line in old_string.splitlines():
+                  f.write(f"  {line}\n")
+              f.write("new: |\n")
+              for line in new_string.splitlines():
+                  f.write(f"  {line}\n")
+              f.write("\n")
+new: |
+          # Classify change type (Phase 4)
+          change_type = classify_change_type(user_prompt, file_path, old_string, new_string)
+  
+          # Write YAML entry (append to session file)
+          with log_file.open("a") as f:
+              f.write("---\n")
+              f.write(f"# Edit {datetime.now().isoformat()}\n")
+              f.write(f"time: {datetime.now().isoformat()}\n")
+              f.write(f"file: {file_path}\n")
+              f.write(f"change_type: {change_type}\n")
+              if user_prompt:
+                  f.write("user_prompt: |\n")
+                  for line in user_prompt.splitlines():
+                      f.write(f"  {line}\n")
+              f.write("old: |\n")
+              for line in old_string.splitlines():
+                  f.write(f"  {line}\n")
+              f.write("new: |\n")
+              for line in new_string.splitlines():
+                  f.write(f"  {line}\n")
+              f.write("\n")
+
+---
+# Edit 2025-11-15T10:36:42.823863
+time: 2025-11-15T10:36:42.823873
+file: /Users/bryancostanza/Developer/synodic-hooks/tools/edit-log-indexer.py
+change_type: unknown
+user_prompt: |
+  do 4
+old: |
+  def parse_session_file(session_file: Path) -> dict[str, Any]:
+      """
+      Parse a session YAML file into structured data
+  
+      Args:
+          session_file: Path to session .yml file
+  
+      Returns:
+          Dict with session metadata and edits
+      """
+      with session_file.open("r") as f:
+          lines = f.readlines()
+  
+      session_data = {
+          "file": str(session_file),
+          "metadata": {},
+          "edits": [],
+      }
+  
+      i = 0
+      current_edit = None
+  
+      while i < len(lines):
+          line = lines[i].rstrip()
+  
+          # Session metadata section
+          if "session_id:" in line:
+              session_data["metadata"]["session_id"] = line.split(":", 1)[1].strip()
+          elif "started:" in line:
+              session_data["metadata"]["started"] = line.split(":", 1)[1].strip()
+          elif "repo:" in line:
+              session_data["metadata"]["repo"] = line.split(":", 1)[1].strip()
+          elif "branch:" in line:
+              session_data["metadata"]["branch"] = line.split(":", 1)[1].strip()
+  
+          # Edit entries
+          elif line.startswith("time:"):
+              # Save previous edit if exists
+              if current_edit:
+                  session_data["edits"].append(current_edit)
+  
+              current_edit = {
+                  "time": line.split(":", 1)[1].strip(),
+                  "file": "",
+                  "user_prompt": "",
+                  "old": "",
+                  "new": "",
+              }
+  
+          elif current_edit and line.startswith("file:"):
+              current_edit["file"] = line.split(":", 1)[1].strip()
+  
+          elif current_edit and line.startswith("user_prompt: |"):
+              value, next_i = parse_yaml_value(lines, i)
+              current_edit["user_prompt"] = value
+              i = next_i - 1
+  
+          elif current_edit and line.startswith("old: |"):
+              value, next_i = parse_yaml_value(lines, i)
+              current_edit["old"] = value
+              i = next_i - 1
+  
+          elif current_edit and line.startswith("new: |"):
+              value, next_i = parse_yaml_value(lines, i)
+              current_edit["new"] = value
+              i = next_i - 1
+  
+          i += 1
+  
+      # Don't forget last edit
+      if current_edit:
+          session_data["edits"].append(current_edit)
+  
+      return session_data
+new: |
+  def parse_session_file(session_file: Path) -> dict[str, Any]:
+      """
+      Parse a session YAML file into structured data
+  
+      Args:
+          session_file: Path to session .yml file
+  
+      Returns:
+          Dict with session metadata, edits, and commits (Phase 4)
+      """
+      with session_file.open("r") as f:
+          lines = f.readlines()
+  
+      session_data = {
+          "file": str(session_file),
+          "metadata": {},
+          "edits": [],
+          "commits": [],  # Phase 4
+      }
+  
+      i = 0
+      current_edit = None
+      current_commit = None
+  
+      while i < len(lines):
+          line = lines[i].rstrip()
+  
+          # Session metadata section
+          if "session_id:" in line:
+              session_data["metadata"]["session_id"] = line.split(":", 1)[1].strip()
+          elif "started:" in line:
+              session_data["metadata"]["started"] = line.split(":", 1)[1].strip()
+          elif "repo:" in line:
+              session_data["metadata"]["repo"] = line.split(":", 1)[1].strip()
+          elif "branch:" in line:
+              session_data["metadata"]["branch"] = line.split(":", 1)[1].strip()
+  
+          # Commit entries (Phase 4)
+          elif line.startswith("commit_sha:"):
+              # Save previous commit if exists
+              if current_commit:
+                  session_data["commits"].append(current_commit)
+  
+              current_commit = {
+                  "sha": line.split(":", 1)[1].strip(),
+                  "time": "",
+                  "message": "",
+              }
+  
+          elif current_commit and line.startswith("commit_time:"):
+              current_commit["time"] = line.split(":", 1)[1].strip()
+  
+          elif current_commit and line.startswith("commit_message: |"):
+              value, next_i = parse_yaml_value(lines, i)
+              current_commit["message"] = value
+              i = next_i - 1
+  
+          # Edit entries
+          elif line.startswith("time:"):
+              # Save previous edit if exists
+              if current_edit:
+                  session_data["edits"].append(current_edit)
+              # Save previous commit if exists
+              if current_commit:
+                  session_data["commits"].append(current_commit)
+                  current_commit = None
+  
+              current_edit = {
+                  "time": line.split(":", 1)[1].strip(),
+                  "file": "",
+                  "change_type": "unknown",  # Phase 4
+                  "user_prompt": "",
+                  "old": "",
+                  "new": "",
+              }
+  
+          elif current_edit and line.startswith("file:"):
+              current_edit["file"] = line.split(":", 1)[1].strip()
+  
+          elif current_edit and line.startswith("change_type:"):  # Phase 4
+              current_edit["change_type"] = line.split(":", 1)[1].strip()
+  
+          elif current_edit and line.startswith("user_prompt: |"):
+              value, next_i = parse_yaml_value(lines, i)
+              current_edit["user_prompt"] = value
+              i = next_i - 1
+  
+          elif current_edit and line.startswith("old: |"):
+              value, next_i = parse_yaml_value(lines, i)
+              current_edit["old"] = value
+              i = next_i - 1
+  
+          elif current_edit and line.startswith("new: |"):
+              value, next_i = parse_yaml_value(lines, i)
+              current_edit["new"] = value
+              i = next_i - 1
+  
+          i += 1
+  
+      # Don't forget last edit/commit
+      if current_edit:
+          session_data["edits"].append(current_edit)
+      if current_commit:
+          session_data["commits"].append(current_commit)
+  
+      return session_data
+
+---
+# Edit 2025-11-15T10:36:59.340066
+time: 2025-11-15T10:36:59.340075
+file: /Users/bryancostanza/Developer/synodic-hooks/tools/edit-log-indexer.py
+change_type: unknown
+user_prompt: |
+  do 4
+old: |
+      index = {
+          "version": "1.0",
+          "generated": datetime.now().isoformat(),
+          "sessions": {},
+          "by_file": {},
+          "by_symbol": {},
+      }
+new: |
+      index = {
+          "version": "2.0",  # Phase 4
+          "generated": datetime.now().isoformat(),
+          "sessions": {},
+          "by_file": {},
+          "by_symbol": {},
+          "by_change_type": {},  # Phase 4
+      }
+
+---
+# Edit 2025-11-15T10:41:21.661461
+time: 2025-11-15T10:41:21.661474
+file: /Users/bryancostanza/Developer/synodic-hooks/tools/edit-log-indexer.py
+change_type: unknown
+user_prompt: |
+  do 4
+old: |
+          # Add to sessions index
+          index["sessions"][session_id] = {
+              "file": session_file.name,
+              "started": session_data["metadata"].get("started", ""),
+              "branch": session_data["metadata"].get("branch", ""),
+              "edit_count": len(session_data["edits"]),
+              "files_modified": [],
+          }
+new: |
+          # Add to sessions index (Phase 4: include commits)
+          index["sessions"][session_id] = {
+              "file": session_file.name,
+              "started": session_data["metadata"].get("started", ""),
+              "branch": session_data["metadata"].get("branch", ""),
+              "edit_count": len(session_data["edits"]),
+              "commit_count": len(session_data["commits"]),  # Phase 4
+              "commits": session_data["commits"],  # Phase 4
+              "files_modified": [],
+          }
+
+---
+# Edit 2025-11-15T10:41:48.089887
+time: 2025-11-15T10:41:48.089896
+file: /Users/bryancostanza/Developer/synodic-hooks/tools/edit-log-indexer.py
+change_type: unknown
+user_prompt: |
+  do 4
+old: |
+              # Extract symbols from new code (added)
+              new_symbols = extract_symbols(edit["new"])
+              for symbol in new_symbols:
+                  symbol_name = symbol["name"]
+                  if symbol_name not in index["by_symbol"]:
+                      index["by_symbol"][symbol_name] = []
+  
+                  # Check if symbol existed in old code
+                  if not any(s["name"] == symbol_name for s in old_symbols):
+                      # Symbol was added
+                      index["by_symbol"][symbol_name].append({
+                          "session": session_id,
+                          "file": file_path,
+                          "action": "added",
+                          "time": edit_time,
+                      })
+  
+      print(f"\n✅ Indexed {len(index['sessions'])} sessions")
+      print(f"   - {len(index['by_file'])} files modified")
+      print(f"   - {len(index['by_symbol'])} symbols tracked")
+new: |
+              # Extract symbols from new code (added)
+              new_symbols = extract_symbols(edit["new"])
+              for symbol in new_symbols:
+                  symbol_name = symbol["name"]
+                  if symbol_name not in index["by_symbol"]:
+                      index["by_symbol"][symbol_name] = []
+  
+                  # Check if symbol existed in old code
+                  if not any(s["name"] == symbol_name for s in old_symbols):
+                      # Symbol was added
+                      index["by_symbol"][symbol_name].append({
+                          "session": session_id,
+                          "file": file_path,
+                          "action": "added",
+                          "time": edit_time,
+                      })
+  
+              # Index by change type (Phase 4)
+              change_type = edit.get("change_type", "unknown")
+              if change_type not in index["by_change_type"]:
+                  index["by_change_type"][change_type] = []
+  
+              index["by_change_type"][change_type].append({
+                  "session": session_id,
+                  "file": file_path,
+                  "time": edit_time,
+              })
+  
+      print(f"\n✅ Indexed {len(index['sessions'])} sessions")
+      print(f"   - {len(index['by_file'])} files modified")
+      print(f"   - {len(index['by_symbol'])} symbols tracked")
+      print(f"   - {len(index['by_change_type'])} change types recorded")
+
+---
+# Edit 2025-11-15T10:59:00.445255
+time: 2025-11-15T10:59:00.445267
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py
+change_type: unknown
+user_prompt: |
+  do 4
+old: |
+  def is_git_commit_command(command: str) -> bool:
+      """
+      Detect if a bash command is a git commit operation
+  
+      Args:
+          command: Bash command string
+  
+      Returns:
+          True if this is a git commit operation
+      """
+      try:
+          tokens = shlex.split(command)
+      except ValueError:
+          return bool(re.search(r"\bgit\b.*\bcommit\b", command))
+  
+      if len(tokens) < 2:
+          return False
+  
+      if not tokens[0].endswith("git"):
+          return False
+  
+      # Find first non-flag token after 'git'
+      skip_next = False
+      for token in tokens[1:]:
+          if skip_next:
+              skip_next = False
+              continue
+          if token.startswith("-"):
+              if token in ["-C", "-c", "--git-dir", "--work-tree"]:
+                  skip_next = True
+              continue
+          return token == "commit"
+  
+      return False
+new: |
+  def is_git_commit_command(command: str) -> bool:
+      """
+      Detect if a bash command is a git commit operation
+  
+      Handles chained commands (e.g., "git add -A && git commit -m 'msg'")
+  
+      Args:
+          command: Bash command string
+  
+      Returns:
+          True if this is a git commit operation
+      """
+      # Use regex to detect git commit in command (handles chained commands)
+      return bool(re.search(r"\bgit\b.*\bcommit\b", command))
+
+---
+# Edit 2025-11-15T11:01:15.461945
+time: 2025-11-15T11:01:15.461964
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py
+change_type: unknown
+user_prompt: |
+  do 4
+old: |
+  def is_git_commit_command(command: str) -> bool:
+      """
+      Detect if a bash command is a git commit operation
+  
+      Handles chained commands (e.g., "git add -A && git commit -m 'msg'")
+  
+      Args:
+          command: Bash command string
+  
+      Returns:
+          True if this is a git commit operation
+      """
+      # Use regex to detect git commit in command (handles chained commands)
+      return bool(re.search(r"\bgit\b.*\bcommit\b", command))
+new: |
+  def is_git_commit_command(command: str) -> bool:
+      """
+      Detect if a bash command is a git commit operation
+  
+      Handles chained commands (e.g., "git add -A && git commit -m 'msg'")
+      and complex shell syntax.
+  
+      Args:
+          command: Bash command string
+  
+      Returns:
+          True if this is a git commit operation
+      """
+      # Use regex to detect git commit in command (handles chained commands)
+      return bool(re.search(r"\bgit\b.*\bcommit\b", command))
+

@@ -2,10 +2,16 @@
 """
 PostToolUse Hook for Claude Code
 Routes file edits to appropriate formatters based on file type
+Tracks git commits for session metadata (Phase 4)
 """
 
+import json
 import os
+import re
+import shlex
+import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 # Add directories to path for imports (resolve symlinks first)
@@ -95,12 +101,136 @@ def process_file(file_path: Path, project_dir: Path) -> bool:
         return False
 
 
+def is_git_commit_command(command: str) -> bool:
+    """
+    Detect if a bash command is a git commit operation
+
+    Handles chained commands (e.g., "git add -A && git commit -m 'msg'")
+    and complex shell syntax.
+
+    Args:
+        command: Bash command string
+
+    Returns:
+        True if this is a git commit operation
+    """
+    # Use regex to detect git commit in command (handles chained commands)
+    return bool(re.search(r"\bgit\b.*\bcommit\b", command))
+
+
+def find_git_root(cwd: str) -> Path | None:
+    """
+    Find the git repository root
+
+    Args:
+        cwd: Current working directory
+
+    Returns:
+        Path to git root, or None if not in a git repo
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return Path(result.stdout.strip())
+    except Exception:
+        pass
+
+    return None
+
+
+def record_commit_to_session(cwd: str) -> None:
+    """
+    Record the latest commit to the current session file
+
+    Called after a git commit command succeeds.
+    Appends commit metadata to the session file.
+
+    Args:
+        cwd: Current working directory (repo)
+    """
+    try:
+        # Find git root
+        git_root = find_git_root(cwd)
+        if not git_root:
+            return
+
+        # Check if session file exists
+        claude_dir = git_root / ".claude"
+        current_session_file = claude_dir / "current_session"
+
+        if not current_session_file.exists():
+            return  # No active session
+
+        # Read session ID
+        session_id = current_session_file.read_text().strip()
+
+        # Get session file
+        session_filename = session_id.replace("claude-", "") + ".yml"
+        session_file = claude_dir / "sessions" / session_filename
+
+        if not session_file.exists():
+            return  # Session file doesn't exist
+
+        # Get latest commit info
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%H%n%s%n%ai"],
+            capture_output=True,
+            text=True,
+            cwd=str(git_root),
+            timeout=5,
+        )
+
+        if result.returncode != 0:
+            return  # Couldn't get commit info
+
+        lines = result.stdout.strip().split("\n")
+        if len(lines) < 3:
+            return
+
+        commit_sha = lines[0]
+        commit_message = lines[1]
+        commit_time = lines[2]
+
+        # Append commit record to session file
+        with session_file.open("a") as f:
+            f.write("---\n")
+            f.write(f"# Commit {commit_sha[:8]}\n")
+            f.write(f"commit_sha: {commit_sha}\n")
+            f.write(f"commit_time: {commit_time}\n")
+            f.write("commit_message: |\n")
+            for line in commit_message.splitlines():
+                f.write(f"  {line}\n")
+            f.write("\n")
+
+    except Exception:
+        # Silent failure - don't block workflow
+        pass
+
+
 def main():
     """Main entry point for PostToolUse hook"""
     try:
         # Read hook data
         hook_data = get_hook_data()
         tool_name = get_tool_name(hook_data)
+
+        # Handle git commit tracking (Phase 4)
+        if tool_name == "Bash":
+            tool_input = hook_data.get("tool_input", {})
+            command = tool_input.get("command", "")
+            cwd = hook_data.get("cwd", ".")
+
+            if is_git_commit_command(command):
+                record_commit_to_session(cwd)
+
+            # Don't process Bash commands for formatting
+            sys.exit(0)
 
         # Only process file edit operations
         if not should_process_tool(tool_name, EDIT_TOOLS):

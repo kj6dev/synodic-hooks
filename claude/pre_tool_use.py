@@ -36,8 +36,201 @@ from shared.hook_utils import (
 )
 
 
-def log_swift_edit(hook_data: dict) -> None:
-    """Log Swift file edits to YAML for pattern analysis"""
+def should_log_edit(file_path: str, old_string: str, new_string: str) -> bool:
+    """
+    Determine if an edit should be logged based on filtering rules
+
+    Filters out:
+    - Binary files
+    - Large files (> 1MB)
+    - Massive edits (> 10,000 lines)
+    - Lock files and build outputs
+
+    Args:
+        file_path: Path to file being edited
+        old_string: Old content
+        new_string: New content
+
+    Returns:
+        True if edit should be logged
+    """
+    file_path_lower = file_path.lower()
+
+    # Size limits
+    MAX_FILE_SIZE = 1_048_576  # 1MB
+    MAX_EDIT_LINES = 10_000
+
+    # Check edit size
+    old_lines = len(old_string.splitlines())
+    new_lines = len(new_string.splitlines())
+    if old_lines > MAX_EDIT_LINES or new_lines > MAX_EDIT_LINES:
+        return False  # Edit too large
+
+    # Estimate file size from edit (conservative - assume edit is ~10% of file)
+    estimated_size = max(len(old_string), len(new_string)) * 10
+    if estimated_size > MAX_FILE_SIZE:
+        return False
+
+    # Exclude patterns - common noise files
+    exclude_patterns = [
+        # Lock files
+        ".lock",
+        "package-lock.json",
+        "yarn.lock",
+        "gemfile.lock",
+        "cargo.lock",
+        "poetry.lock",
+        # Build outputs
+        "/build/",
+        "/dist/",
+        "/.build/",
+        "/target/",
+        "/.next/",
+        "/node_modules/",
+        # Binary indicators
+        ".o",
+        ".pyc",
+        ".class",
+        ".exe",
+        ".so",
+        ".dylib",
+    ]
+
+    for pattern in exclude_patterns:
+        if pattern in file_path_lower:
+            return False
+
+    return True
+
+
+def find_git_root(cwd: str) -> Path | None:
+    """
+    Find the git repository root by walking up from current directory
+
+    Args:
+        cwd: Current working directory
+
+    Returns:
+        Path to git root, or None if not in a git repo
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return Path(result.stdout.strip())
+    except Exception:
+        pass
+
+    return None
+
+
+def get_or_create_session_id(git_root: Path) -> str:
+    """
+    Get current session ID or create a new one
+
+    Session ID format: claude-YYYYMMDD-HHMMSS
+    Stored in .claude/current_session
+
+    Args:
+        git_root: Path to git repository root
+
+    Returns:
+        Session ID string
+    """
+    claude_dir = git_root / ".claude"
+    session_file = claude_dir / "current_session"
+
+    # Check if session file exists and is recent (< 4 hours old)
+    if session_file.exists():
+        try:
+            session_id = session_file.read_text().strip()
+            # Parse timestamp from session ID
+            timestamp_str = session_id.replace("claude-", "")
+            # Simple heuristic: if file modified < 4 hours ago, reuse session
+            mtime = session_file.stat().st_mtime
+            import time
+            if (time.time() - mtime) < (4 * 3600):
+                return session_id
+        except Exception:
+            pass
+
+    # Create new session ID
+    session_id = datetime.now().strftime("claude-%Y%m%d-%H%M%S")
+
+    # Write to file
+    claude_dir.mkdir(exist_ok=True)
+    session_file.write_text(session_id)
+
+    return session_id
+
+
+def get_session_metadata(git_root: Path, session_id: str) -> dict:
+    """
+    Get or create session metadata
+
+    Args:
+        git_root: Path to git repository root
+        session_id: Current session ID
+
+    Returns:
+        Dict with session metadata
+    """
+    try:
+        # Get current branch
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            cwd=str(git_root),
+            timeout=5,
+        )
+        branch = result.stdout.strip() if result.returncode == 0 else "unknown"
+    except Exception:
+        branch = "unknown"
+
+    return {
+        "session_id": session_id,
+        "started": datetime.now().isoformat(),
+        "repo": str(git_root),
+        "branch": branch,
+    }
+
+
+def write_session_metadata(session_file: Path, metadata: dict) -> None:
+    """
+    Write session metadata to the beginning of session file
+
+    Args:
+        session_file: Path to session file
+        metadata: Session metadata dict
+    """
+    with session_file.open("w") as f:
+        f.write("---\n")
+        f.write("# Session Metadata\n")
+        f.write(f"session_id: {metadata['session_id']}\n")
+        f.write(f"started: {metadata['started']}\n")
+        f.write(f"repo: {metadata['repo']}\n")
+        f.write(f"branch: {metadata['branch']}\n")
+        f.write("edit_count: 0\n")
+        f.write("---\n\n")
+
+
+def log_file_edit(hook_data: dict) -> None:
+    """
+    Log file edits to per-repo session YAML files for pattern analysis
+
+    New behavior (Phase 1):
+    - Logs ALL text file edits (not just Swift)
+    - Detects git repos and logs to .claude/sessions/SESSION_ID.yml
+    - Falls back to global log if not in git repo
+    - Implements filtering (size limits, exclude patterns)
+    - Adds session metadata (session_id, repo, branch)
+    """
     try:
         tool_name = get_tool_name(hook_data)
         if tool_name != "Edit":
@@ -45,9 +238,36 @@ def log_swift_edit(hook_data: dict) -> None:
 
         tool_input = get_tool_input(hook_data)
         file_path = tool_input.get("file_path", "")
+        old_string = tool_input.get("old_string", "")
+        new_string = tool_input.get("new_string", "")
 
-        if not file_path.endswith(".swift"):
+        # Apply filtering
+        if not should_log_edit(file_path, old_string, new_string):
             return
+
+        # Detect if the file being edited is in a git repo
+        # Use the file's directory, not the current working directory
+        file_dir = str(Path(file_path).parent)
+        git_root = find_git_root(file_dir)
+
+        if git_root:
+            # Per-repo session logging
+            session_id = get_or_create_session_id(git_root)
+            sessions_dir = git_root / ".claude" / "sessions"
+            sessions_dir.mkdir(parents=True, exist_ok=True)
+
+            # Session file format: YYYYMMDD-HHMMSS.yml
+            session_filename = session_id.replace("claude-", "") + ".yml"
+            log_file = sessions_dir / session_filename
+
+            # Create session file with metadata if new
+            if not log_file.exists():
+                metadata = get_session_metadata(git_root, session_id)
+                write_session_metadata(log_file, metadata)
+        else:
+            # Fallback to global log
+            log_file = Path.home() / "Developer" / "swift-edits.yml"
+            log_file.parent.mkdir(exist_ok=True)
 
         # Get user prompt from session-specific cache (primary method)
         user_prompt = ""
@@ -88,15 +308,10 @@ def log_swift_edit(hook_data: dict) -> None:
                 except Exception:
                     pass
 
-        # Write YAML entry
-        log_file = Path.home() / "Developer" / "swift-edits.yml"
-        log_file.parent.mkdir(exist_ok=True)
-
-        old_string = tool_input.get("old_string", "")
-        new_string = tool_input.get("new_string", "")
-
+        # Write YAML entry (append to session file)
         with log_file.open("a") as f:
             f.write("---\n")
+            f.write(f"# Edit {datetime.now().isoformat()}\n")
             f.write(f"time: {datetime.now().isoformat()}\n")
             f.write(f"file: {file_path}\n")
             if user_prompt:
@@ -364,8 +579,8 @@ def main():
         hook_data = get_hook_data()
         tool_name = get_tool_name(hook_data)
 
-        # Log Swift edits (silent, non-blocking)
-        log_swift_edit(hook_data)
+        # Log file edits (silent, non-blocking)
+        log_file_edit(hook_data)
 
         # Only validate Bash commands
         if tool_name == "Bash":

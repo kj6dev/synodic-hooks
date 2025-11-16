@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+"""
+Rebuild .claude/index.json from session files
+
+Usage:
+    claude-reindex-sessions [repo-path]
+    claude-reindex-sessions  # Uses current directory
+"""
+
+import subprocess
+import sys
+from pathlib import Path
+
+
+def main():
+    # Get repo path from args or use current directory
+    if len(sys.argv) > 1:
+        repo_path = Path(sys.argv[1]).resolve()
+    else:
+        repo_path = Path.cwd()
+
+    # Find edit-log-indexer.py
+    tools_dir = Path(__file__).parent
+    indexer_script = tools_dir / "edit-log-indexer.py"
+
+    if not indexer_script.exists():
+        print(f"❌ Could not find edit-log-indexer.py at {indexer_script}")
+        sys.exit(1)
+
+    # Run indexer
+    result = subprocess.run(
+        [sys.executable, str(indexer_script), str(repo_path)],
+        capture_output=False,
+    )
+
+    sys.exit(result.returncode)
+
+
+if __name__ == "__main__":
+    main()

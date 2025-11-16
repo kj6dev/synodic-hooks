@@ -13,6 +13,7 @@ from .claude import (
     get_claude_branches,
     is_claude_branch,
     is_empty_claude_branch,
+    is_merged_claude_branch,
 )
 from .repo import find_repo_root, is_git_repo_root
 from .status import get_current_branch, get_git_status, has_uncommitted_changes
@@ -29,6 +30,7 @@ __all__ = [
     "get_claude_branches",
     "is_claude_branch",
     "is_empty_claude_branch",
+    "is_merged_claude_branch",
     # Repository operations
     "find_repo_root",
     "is_git_repo_root",

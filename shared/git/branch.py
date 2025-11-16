@@ -22,14 +22,16 @@ def branch_exists(branch_name: str, repo_path: Optional[str] = None) -> bool:
             capture_output=True,
             text=True,
             cwd=repo_path,
-            timeout=5
+            timeout=5,
         )
         return bool(result.stdout.strip())
     except Exception:
         return False
 
 
-def create_branch(branch_name: str, base_branch: str = "develop", repo_path: Optional[str] = None) -> bool:
+def create_branch(
+    branch_name: str, base_branch: str = "develop", repo_path: Optional[str] = None
+) -> bool:
     """
     Create a new git branch
 
@@ -46,20 +48,21 @@ def create_branch(branch_name: str, base_branch: str = "develop", repo_path: Opt
         result = subprocess.run(
             ["git", "show-ref", "--verify", "--quiet", f"refs/heads/{base_branch}"],
             cwd=repo_path,
-            timeout=5
+            timeout=5,
         )
 
         if result.returncode != 0:
-            # Base branch doesn't exist, try main/master
-            for fallback in ["main", "master"]:
-                result = subprocess.run(
-                    ["git", "show-ref", "--verify", "--quiet", f"refs/heads/{fallback}"],
-                    cwd=repo_path,
-                    timeout=5
-                )
-                if result.returncode == 0:
-                    base_branch = fallback
-                    break
+            # Base branch doesn't exist, only try main as fallback
+            result = subprocess.run(
+                ["git", "show-ref", "--verify", "--quiet", "refs/heads/main"],
+                cwd=repo_path,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                base_branch = "main"
+            else:
+                # Neither develop nor main exists - fail hard
+                return False
 
         # Create branch
         subprocess.run(
@@ -67,7 +70,7 @@ def create_branch(branch_name: str, base_branch: str = "develop", repo_path: Opt
             check=True,
             capture_output=True,
             cwd=repo_path,
-            timeout=10
+            timeout=10,
         )
         return True
 
@@ -94,14 +97,16 @@ def checkout_branch(branch_name: str, repo_path: Optional[str] = None) -> bool:
             check=True,
             capture_output=True,
             cwd=repo_path,
-            timeout=10
+            timeout=10,
         )
         return True
     except Exception:
         return False
 
 
-def delete_branch(branch_name: str, force: bool = False, repo_path: Optional[str] = None) -> bool:
+def delete_branch(
+    branch_name: str, force: bool = False, repo_path: Optional[str] = None
+) -> bool:
     """
     Delete a git branch
 
@@ -120,7 +125,7 @@ def delete_branch(branch_name: str, force: bool = False, repo_path: Optional[str
             check=True,
             capture_output=True,
             cwd=repo_path,
-            timeout=5
+            timeout=5,
         )
         return True
     except Exception:
@@ -144,16 +149,16 @@ def get_branches(pattern: str = "*", repo_path: Optional[str] = None) -> list[st
             capture_output=True,
             text=True,
             cwd=repo_path,
-            timeout=5
+            timeout=5,
         )
 
         # Parse output (format: "  branch-name" or "* branch-name")
         branches = []
-        for line in result.stdout.strip().split('\n'):
+        for line in result.stdout.strip().split("\n"):
             line = line.strip()
             if line:
                 # Remove leading * (current branch marker)
-                branch = line.lstrip('* ').strip()
+                branch = line.lstrip("* ").strip()
                 branches.append(branch)
 
         return branches

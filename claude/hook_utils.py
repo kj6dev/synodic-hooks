@@ -71,13 +71,25 @@ def get_bash_command(hook_data: Dict[str, Any]) -> str:
     return tool_input.get("command", "")
 
 
-def get_file_paths() -> List[str]:
+def get_file_paths(hook_data: Optional[dict] = None) -> List[str]:
     """
-    Get modified file paths from environment
+    Get modified file paths from hook data or environment
+
+    Args:
+        hook_data: Optional hook data dict (if not provided, reads from stdin)
 
     Returns:
         List of file path strings
     """
+    if hook_data is None:
+        hook_data = get_hook_data()
+
+    # Try to get file path from tool_input (PostToolUse hooks)
+    tool_input = hook_data.get("tool_input", {})
+    if "file_path" in tool_input:
+        return [tool_input["file_path"]]
+
+    # Fallback to environment variable (for other scenarios)
     file_paths = os.environ.get("CLAUDE_FILE_PATHS", "")
     return [f.strip() for f in file_paths.split() if f.strip()]
 

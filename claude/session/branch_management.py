@@ -16,6 +16,7 @@ from shared.git import (
     is_claude_branch,
     is_empty_claude_branch,
     is_git_repo_root,
+    is_merged_claude_branch,
 )
 from shared.hook_utils import emit_info, emit_success, emit_warning
 
@@ -60,7 +61,11 @@ def should_auto_create_branch(cwd: str) -> bool:
 
 def cleanup_empty_branches(repo_path: str) -> None:
     """
-    Remove claude/* branches with no unique commits
+    Remove claude/* branches with no unique commits or that are fully merged
+
+    Removes branches that are:
+    1. Empty (no unique commits compared to base branch)
+    2. Fully merged to develop/main/master
 
     Self-healing: Errors only emit warnings, don't fail
 
@@ -76,11 +81,21 @@ def cleanup_empty_branches(repo_path: str) -> None:
             if branch == current:
                 continue
 
+            # Check if empty (zero commits)
             if is_empty_claude_branch(branch, repo_path):
                 if delete_branch(branch, force=True, repo_path=repo_path):
                     emit_info(f"Removed empty branch: {branch}")
                 else:
                     emit_warning(f"Could not remove empty branch: {branch}")
+                continue
+
+            # Check if merged
+            if is_merged_claude_branch(branch, repo_path):
+                if delete_branch(branch, force=False, repo_path=repo_path):
+                    emit_info(f"Removed merged branch: {branch}")
+                else:
+                    emit_warning(f"Could not remove merged branch: {branch}")
+                continue
 
     except Exception as e:
         emit_warning(f"Branch cleanup failed: {e}")

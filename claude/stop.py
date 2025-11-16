@@ -11,7 +11,7 @@ from pathlib import Path
 # Add parent directory to path for imports (resolve symlinks first)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hook_utils import get_hook_data, play_sound, format_hook_error, SOUND_GLASS
+from hook_utils import get_hook_data, format_hook_error
 from shared.discord import send_notification
 
 
@@ -21,16 +21,12 @@ def main():
         # Read hook data (for potential future use)
         hook_data = get_hook_data()
 
-        # Play completion sound
-        play_sound(SOUND_GLASS)
+        # Play completion sound (disabled - Discord notifications sufficient)
+        # play_sound(SOUND_GLASS)
 
         # Send Discord notification
         project_dir = os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd())
-        send_notification(
-            message="🛑 Stop",
-            project=Path(project_dir).name,
-            hook_type="stop"
-        )
+        send_notification(message="🛑", project=Path(project_dir).name)
 
         # Could add session cleanup logic here:
         # - Save session state

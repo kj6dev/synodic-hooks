@@ -6,9 +6,9 @@ Handles .py files
 import sys
 from pathlib import Path
 
-# Import parent hook_utils
+# Import from claude.hook_utils (formatters/ at root, claude/ is sibling)
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from hook_utils import run_command, command_exists
+from claude.hook_utils import run_command, command_exists
 
 # Register this formatter
 from . import register_formatter

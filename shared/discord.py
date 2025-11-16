@@ -8,6 +8,7 @@ Follows self-healing philosophy: errors never block hook execution.
 
 import json
 import os
+import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -36,8 +37,8 @@ def get_webhook_url() -> Optional[str]:
             with open(env_file) as f:
                 for line in f:
                     line = line.strip()
-                    if line and not line.startswith('#') and '=' in line:
-                        key, value = line.split('=', 1)
+                    if line and not line.startswith("#") and "=" in line:
+                        key, value = line.split("=", 1)
                         if key.strip() == "DISCORD_WEBHOOK_URL":
                             return value.strip()
         except Exception:
@@ -49,19 +50,15 @@ def get_webhook_url() -> Optional[str]:
 def send_notification(
     message: str,
     project: str,
-    hook_type: str,
     webhook_url: Optional[str] = None,
-    color: int = 5814783,  # Purple
 ) -> bool:
     """
     Send notification to Discord via webhook
 
     Args:
-        message: Main notification message
+        message: Emoji/icon for the notification (e.g., "🛑", "🔔")
         project: Project/directory name
-        hook_type: Type of hook (session_start, session_end, etc.)
         webhook_url: Discord webhook URL (auto-detected if None)
-        color: Embed color as decimal (default: purple)
 
     Returns:
         True if sent successfully, False otherwise
@@ -79,37 +76,20 @@ def send_notification(
         return False
 
     try:
-        # Build Discord embed payload
-        payload = {
-            "content": message,
-            "embeds": [{
-                "color": color,
-                "fields": [
-                    {
-                        "name": "Project",
-                        "value": project,
-                        "inline": True
-                    },
-                    {
-                        "name": "Hook",
-                        "value": hook_type,
-                        "inline": True
-                    }
-                ]
-            }]
-        }
+        # Build simple Discord payload: "🛑 `repo-name`"
+        payload = {"content": f"{message} `{project}`"}
 
         # Convert to JSON and encode
-        data = json.dumps(payload).encode('utf-8')
+        data = json.dumps(payload).encode("utf-8")
 
         # Create and send request
         req = urllib.request.Request(
             webhook_url,
             data=data,
             headers={
-                'Content-Type': 'application/json',
-                'User-Agent': 'Claude-Code-Hooks/1.0'
-            }
+                "Content-Type": "application/json",
+                "User-Agent": "Claude-Code-Hooks/1.0",
+            },
         )
 
         with urllib.request.urlopen(req, timeout=5) as response:
@@ -125,50 +105,3 @@ def send_notification(
     except Exception as e:
         print(f"⚠️  Discord notification failed: {e}", file=sys.stderr)
         return False
-
-
-def notify_session_start(project_dir: str, branch: str) -> bool:
-    """
-    Send session start notification
-
-    Args:
-        project_dir: Path to project directory
-        branch: Current git branch name
-
-    Returns:
-        True if notification sent, False otherwise
-    """
-    project = Path(project_dir).name
-    message = f"🚀 Claude Code session started on `{branch}`"
-
-    return send_notification(
-        message=message,
-        project=project,
-        hook_type="session_start",
-        color=3447003  # Blue
-    )
-
-
-def notify_session_end(project_dir: str) -> bool:
-    """
-    Send session end notification
-
-    Args:
-        project_dir: Path to project directory
-
-    Returns:
-        True if notification sent, False otherwise
-    """
-    project = Path(project_dir).name
-    message = "✅ Claude Code session complete"
-
-    return send_notification(
-        message=message,
-        project=project,
-        hook_type="session_end",
-        color=5763719  # Green
-    )
-
-
-# Prevent import-time errors
-import sys

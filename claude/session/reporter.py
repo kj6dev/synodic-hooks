@@ -8,7 +8,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from shared.git import get_claude_branches, get_current_branch, get_git_status, has_uncommitted_changes
-from shared.discord import notify_session_start
 
 
 def report_session_context(repo_path: str) -> None:
@@ -42,9 +41,6 @@ def report_session_context(repo_path: str) -> None:
             print(f"🌿 {len(claude_branches)} claude/* branches exist", file=sys.stderr)
 
         print("", file=sys.stderr)
-
-        # Send Discord notification (non-blocking)
-        notify_session_start(repo_path, current)
 
     except Exception:
         # Don't fail on reporting errors

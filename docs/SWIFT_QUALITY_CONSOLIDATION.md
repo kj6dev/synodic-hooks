@@ -261,57 +261,66 @@ Is it automatically fixable without human judgment?
 3. ✅ Test on gravity-well project
 4. ✅ Verify hook integration works correctly
 
-### Phase 3: Documentation Consolidation (Next)
-1. Update apple-platform-dev skill:
-   - Change 12-line → 15-line body rule
-   - Add SwiftSyntax rule identifier reference
-   - Add "When You See a Violation" workflow
-   - Expand with swift-edits.yml patterns
+### Phase 3: Documentation Consolidation ✅ COMPLETED
+1. ✅ Update apple-platform-dev skill:
+   - ✅ Change 12-line → 15-line body rule
+   - ✅ Add SwiftSyntax rule identifier reference
+   - ✅ Add "When You See a Violation" workflow
+   - ✅ Document enforcement via swiftlintcustom-smart
 
-2. Reduce CLAUDE-SWIFT.md to ~100 lines:
-   - Keep critical reminders only
-   - Move procedural guidance to skill
-   - Remove tool-enforced rules
+2. ✅ Reduce CLAUDE-SWIFT.md to 157 lines (40% reduction):
+   - ✅ Keep critical reminders only (10 core sections)
+   - ✅ Move procedural guidance to skill
+   - ✅ Remove tool-enforced rules
 
-3. Update skill references/ files with detailed patterns
+3. ⏭️ Update skill references/ files with detailed patterns (deferred to future)
 
-### Phase 4 Alpha: Preference Discovery (Future Session)
+### Phase 4 Alpha: Preference Discovery Framework ✅ COMPLETED
 **Purpose**: Extract unstated preferences through deliberate code examples
 
-**Approach**:
-1. Create comprehensive "PreferenceDiscovery.swift" file with 50+ intentional edge cases:
-   - Property wrapper ordering: `@State private` vs `private @State`
-   - Wrapper body patterns: When is single-property return acceptable?
-   - Naming conventions: "View" suffix patterns, "viewModel" vs "model"
-   - Property organization: Alphabetical within categories? Group by feature?
-   - ViewModifier bodies: Same rules as View bodies?
-   - Computed property patterns: Multiple views returned acceptable?
-   - Preview patterns: One preview vs multiple? Required content?
-   - Architecture boundaries: View vs computed property extraction thresholds
+**Implementation**:
+1. ✅ Created PreferenceDiscovery.swift with 52 edge cases across 6 categories:
+   - A. Property wrapper ordering (8 examples)
+   - B. View body edge cases (10 examples)
+   - C. Naming conventions (10 examples)
+   - D. Constants patterns (8 examples)
+   - E. Architecture boundaries (10 examples)
+   - F. Preview patterns (6 examples)
 
-2. User reviews file and provides reactions:
-   - "That's fine" → Document as acceptable pattern
-   - "Absolutely not" → Create rule or add to skill
-   - "Depends on context" → Document decision framework
+2. ✅ Created PREFERENCE_TRACKING.md decision recording template:
+   - Accept / Reject / Context-Dependent framework
+   - Reasoning capture
+   - Confidence rating (Strong / Moderate / Weak)
+   - Implementation path mapping (SwiftSyntax / Skill / CLAUDE-SWIFT / None)
 
-3. Codify discoveries:
-   - New SwiftSyntax rules for mechanical patterns
-   - Skill updates for judgment-based patterns
-   - CLAUDE-SWIFT.md updates for critical anti-patterns
+3. ✅ Created SESSION_GUIDE.md facilitation guide:
+   - 90-120 minute structured session
+   - Recording best practices
+   - Decision quality criteria
+   - Implementation criteria
+   - Post-session action plan
+   - Success metrics
 
-4. Create test suite from discovered patterns
+4. ✅ Created comprehensive README.md with methodology
 
-**Expected Output**:
-- 10-20 new codified preferences
-- 2-5 new SwiftSyntax rules
-- Expanded skill guidance
-- Comprehensive pattern library
+**Deliverables**:
+- PreferenceDiscovery.swift (52 edge cases)
+- PREFERENCE_TRACKING.md (structured template)
+- SESSION_GUIDE.md (complete facilitation guide)
+- README.md (quick start + methodology)
 
-**Benefits**:
-- Discover preferences you didn't know you had
-- Systematic extraction vs ad-hoc discovery
-- Comprehensive coverage of edge cases
-- Reusable preference-discovery methodology
+**Next Steps** (Deferred to Future Session):
+1. ⏭️ Conduct preference discovery session (90-120 minutes)
+2. ⏭️ Implement 2-5 new SwiftSyntax rules from strong preferences
+3. ⏭️ Update apple-platform-dev skill with decision frameworks
+4. ⏭️ Add critical reminders to CLAUDE-SWIFT.md
+5. ⏭️ Create test suite from discovered patterns
+
+**Research Foundation**:
+- Preference elicitation methodologies (choice-based queries, ~10 query sessions)
+- Edge case discovery techniques (boundary testing, equivalence partitioning)
+- Pattern mining strategies (frequency analysis, expert curation)
+- UX research methods (qualitative probing, confidence rating)
 
 ### Phase 4 Beta: Continuous Improvement (Ongoing)
 1. Monitor swift-edits.yml for new patterns

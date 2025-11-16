@@ -780,3 +780,10 @@ new: |
       # Use regex to detect git commit in command (handles chained commands)
       return bool(re.search(r"\bgit\b.*\bcommit\b", command))
 
+---
+# Commit 97dcfce1
+commit_sha: 97dcfce1bc995c6c6a13d396aa899819d4229cf3
+commit_time: 2025-11-15 11:04:17 -0700
+commit_message: |
+  [Phase 4] Enhanced metadata - commit tracking and change type classification
+

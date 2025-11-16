@@ -205,31 +205,59 @@ This enables:
 8. **SessionStart** - Session initialization
 9. **SessionEnd** - Session finalization (save state, reports)
 
-## Swift Edit Logging
+## Session File Logging
 
 ### Purpose
-Captures all Swift file edits with user intent for future pattern analysis and skill development.
+Captures ALL file edits (not just Swift) with user intent for future pattern analysis and skill development.
 
 ### Implementation
 - **UserPromptSubmit**: Captures prompts to session-specific cache (`~/.claude-prompt-{session_id}.json`)
-- **PreToolUse**: Logs Swift edits to `~/Developer/swift-edits.yml` when Edit tool is used
+- **PreToolUse**: Logs all text file edits to **per-repo** session files in `.claude/sessions/`
+
+### Per-Repo Session Files
+
+**Location**: `<repo-root>/.claude/sessions/YYYYMMDD-HHMMSS.yml`
+
+**Key Behavior**:
+- Logs are saved to the repo WHERE THE FILE IS EDITED, not where Claude Code is running
+- Example: Editing synodic-cc-config files while running from synodic-hooks → logs go to synodic-cc-config/.claude/sessions/
+- Each session gets a unique YAML file with metadata header
+- Session files are reused if < 4 hours old
+
+**Session Metadata**:
+```yaml
+---
+# Session Metadata
+session_id: claude-20251116-105715
+started: 2025-11-16T10:57:15.123456
+repo: /Users/bryancostanza/Developer/synodic-hooks
+branch: claude/feature-name
+edit_count: 0
+---
+```
 
 ### What Gets Logged
-Only edits via the **Edit tool** on `.swift` files:
+**All text file edits via Edit tool** (with filtering):
 - Timestamp
 - File path
+- Change type (refactor, bugfix, feature, docs, style, test)
 - User prompt (intent behind the edit)
 - Old code
 - New code
 
-**Not logged:**
-- Write tool (creating new Swift files)
-- NotebookEdit operations
-- Non-Swift files
+**Filtered out** (to prevent noise/loops):
+- **.claude/sessions/** files themselves (prevents infinite loop on commit)
+- **.claude/current_session** file
+- Binary files
+- Large files (> 1MB)
+- Massive edits (> 10,000 lines)
+- Lock files (package-lock.json, yarn.lock, etc.)
+- Build outputs (/build/, /dist/, /.build/, /node_modules/)
 
 ### Prompt Capture Strategy
 1. **Primary**: Session-specific cache (fast, clean)
    - Written by UserPromptSubmit hook
+   - `~/.claude-prompt-{session_id}.json`
    - No multi-session conflicts
 2. **Fallback**: Transcript parsing (reliable)
    - Reads conversation history
@@ -239,8 +267,10 @@ Only edits via the **Edit tool** on `.swift` files:
 YAML with readable multi-line strings:
 ```yaml
 ---
-time: 2025-11-10T19:33:16.013728
+# Edit 2025-11-16T10:58:23.456789
+time: 2025-11-16T10:58:23.456789
 file: /path/to/ContentView.swift
+change_type: refactor
 user_prompt: |
   Extract the body into a computed property
 old: |
@@ -255,8 +285,33 @@ new: |
   private var content: some View { ... }
 ```
 
+### Session Files and Git
+
+**CRITICAL**: Session files should be committed with code changes.
+
+**Policy**:
+- ✅ **DO commit** `.claude/sessions/` files with your changes
+- ✅ Session files provide valuable context for code changes
+- ✅ Multiple projects can commit their own session files independently
+- ❌ **DO NOT** add `.claude/` to `.gitignore`
+
+**Why commit session files?**
+- Documents the intent behind code changes (user prompts)
+- Provides pattern analysis data for skill development
+- Creates audit trail of AI-assisted development
+- Enables future preference discovery and rule extraction
+
+**Infinite Loop Prevention**:
+Session files themselves are excluded from logging to prevent:
+1. Commit code + session file
+2. Hook logs commit → updates session file
+3. Session file dirty again → cycle repeats
+
+The exclude filter breaks this loop by not logging edits to `.claude/sessions/` or `.claude/current_session`.
+
 ### Use Cases
-- Pattern detection for apple-platform-dev skill updates
-- Training data collection
+- Pattern detection for skill updates (Swift, Python, TypeScript, etc.)
+- Training data collection across all languages
 - Refactoring pattern analysis
 - Code quality metrics over time
+- Change type analysis (refactor vs bugfix vs feature)

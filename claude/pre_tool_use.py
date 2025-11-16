@@ -6,9 +6,9 @@ Runs before Claude executes any tool.
 
 Responsibilities:
 1. Log Swift file edits for pattern analysis
-2. Detect git commit operations
-3. Enforce branch protection (only allow commits to claude/* branches)
-4. Validate commit operations
+2. Detect git commit and merge operations
+3. Enforce branch protection (only allow commits/merges to claude/* branches)
+4. Validate commit and merge operations
 
 Self-healing: Blocks dangerous operations but provides clear guidance
 """
@@ -459,6 +459,109 @@ def is_initial_commit(repo_path: str) -> bool:
         return False  # On error, assume not initial commit
 
 
+def is_git_merge_command(command: str) -> bool:
+    """
+    Detect if a bash command is a git merge operation
+
+    Handles various git merge formats:
+    - git merge branch-name
+    - git merge --no-ff branch-name
+    - git merge --abort (allowed - escape hatch)
+    - git -C /path merge
+
+    Args:
+        command: Bash command string
+
+    Returns:
+        True if this is a git merge operation (excluding merge --abort)
+    """
+    try:
+        # Parse command into tokens (handles quotes properly)
+        tokens = shlex.split(command)
+    except ValueError:
+        # Unparseable command - use regex fallback
+        return bool(re.search(r"\bgit\b.*\bmerge\b", command)) and "--abort" not in command
+
+    if len(tokens) < 2:
+        return False
+
+    # First token should be git (or path/to/git)
+    if not tokens[0].endswith("git"):
+        return False
+
+    # Find first non-flag token after 'git'
+    skip_next = False
+    for token in tokens[1:]:
+        if skip_next:
+            skip_next = False
+            continue
+        if token.startswith("-"):
+            # Allow merge --abort (escape hatch)
+            if token == "--abort":
+                return False
+            # Flags like -C take an argument, so skip next token
+            if token in ["-C", "-c", "--git-dir", "--work-tree"]:
+                skip_next = True
+            continue  # Skip flags
+        # First non-flag token should be "merge"
+        return token == "merge"
+
+    return False
+
+
+def validate_git_merge(command: str, cwd: str) -> tuple[bool, str]:
+    """
+    Validate git merge operation
+
+    Enforces:
+    - Can only merge on claude/* branches
+    - Merging INTO non-claude/* branches is blocked
+    - git merge --abort is always allowed (escape hatch)
+
+    Args:
+        command: Git merge command
+        cwd: Current working directory
+
+    Returns:
+        Tuple of (allowed, reason)
+        - allowed: True if merge should proceed
+        - reason: Explanation for decision
+    """
+    try:
+        # Get current branch
+        current_branch = get_current_branch(cwd)
+
+        if not current_branch:
+            return False, "Not in a git repository or detached HEAD state"
+
+        # Block merges on non-claude/* branches
+        if not is_claude_branch(current_branch, cwd):
+            reason = (
+                f"🚨 🚨 Merges only allowed on claude/* branches!\n"
+                f"\n"
+                f"Current branch: {current_branch}\n"
+                f"\n"
+                f"📋 You're trying to merge INTO '{current_branch}'.\n"
+                f"   This would modify a non-claude/* branch directly.\n"
+                f"\n"
+                f"Correct workflow:\n"
+                f"   1. Abort: git merge --abort\n"
+                f"   2. Create feature branch: git checkout -b claude/feature-name\n"
+                f"   3. Merge there: git merge <source-branch>\n"
+                f"   4. Then I can help you create a PR or fast-forward if appropriate\n"
+                f"\n"
+                f"Or just ask me to handle the merge!"
+            )
+            return False, reason
+
+        # On claude/* branch - allow merge
+        return True, f"✅ Merging on safe branch: {current_branch}"
+
+    except Exception as e:
+        # On error, be permissive but warn
+        return True, f"⚠️ Could not validate branch: {e}"
+
+
 def validate_git_commit(command: str, cwd: str) -> tuple[bool, str]:
     """
     Validate git commit operation
@@ -560,6 +663,7 @@ def validate_bash_command(hook_data: dict) -> bool:
 
     Currently validates:
     - Git commit operations (must be on claude/* branch)
+    - Git merge operations (must be on claude/* branch)
     - Swift quality tools (must use -smart versions)
 
     Args:
@@ -610,6 +714,18 @@ def validate_bash_command(hook_data: dict) -> bool:
             return False
         else:
             # Log that commit is allowed
+            print(reason, file=sys.stderr)
+            return True
+
+    # Check for git merge
+    if is_git_merge_command(command):
+        allowed, reason = validate_git_merge(command, cwd)
+
+        if not allowed:
+            emit_error(reason)
+            return False
+        else:
+            # Log that merge is allowed
             print(reason, file=sys.stderr)
             return True
 

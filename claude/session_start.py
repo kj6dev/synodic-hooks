@@ -5,9 +5,12 @@ SessionStart Hook for Claude Code
 Runs when a Claude Code session starts or resumes.
 
 Responsibilities:
-1. Auto-create timestamped claude/* branches (if at repo root)
-2. Clean up empty claude/* branches
-3. Provide session context to user
+1. Clean up empty claude/* branches
+2. Provide session context to user
+
+NOTE: Auto-branch creation is DISABLED. Claude must explicitly create
+branches with meaningful names to prevent work accumulation on long-lived
+feature branches.
 
 Self-healing: Never blocks session start. All errors emit warnings only.
 """

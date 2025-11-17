@@ -34,28 +34,17 @@ def should_auto_create_branch(cwd: str) -> bool:
     """
     Determine if we should auto-create a claude/* branch
 
-    Only create if:
-    - Started at git repo root
-    - NOT in home-level meta-directories
-    - Repo doesn't already have a claude/* branch checked out
+    DISABLED: Auto-branch creation disabled to prevent accumulating work
+    on long-lived claude/* branches that can be deleted before merging.
+
+    Claude should explicitly create branches with meaningful names.
 
     Args:
         cwd: Current working directory where Claude started
 
     Returns:
-        True if should auto-create branch
+        Always False (auto-branch creation disabled)
     """
-    # NO: Started at home-level directories
-    if cwd in HOME_DIRS:
-        return False
-
-    # YES: Started at git repo root
-    if is_git_repo_root(cwd):
-        # But only if not already on a claude/* branch
-        current = get_current_branch(cwd)
-        return not is_claude_branch(current, cwd)
-
-    # NO: Not in a git repo
     return False
 
 
@@ -121,8 +110,6 @@ def create_session_branch(repo_path: str) -> None:
         # Create and checkout branch
         if create_branch(branch_name, repo_path=repo_path):
             emit_success(f"Created session branch: {branch_name}")
-            emit_info("💡 Rename once you understand the task:")
-            emit_info(f"   git branch -m {branch_name}-descriptive-name")
         else:
             emit_warning(f"Could not create branch: {branch_name}")
             emit_info("Continuing on current branch")

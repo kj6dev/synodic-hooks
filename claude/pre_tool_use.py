@@ -9,7 +9,8 @@ Responsibilities:
 2. Detect git commit, merge, and push operations
 3. Enforce branch protection (only allow commits/merges to claude/* branches)
 4. Prevent direct pushes to protected branches (main, master, production)
-5. Handle chained commands (e.g., cmd1 && cmd2 && cmd3)
+5. Warn when creating claude/* branches from other claude/* branches
+6. Handle chained commands (e.g., cmd1 && cmd2 && cmd3)
 
 Self-healing: Blocks dangerous operations but provides clear guidance
 """
@@ -640,6 +641,148 @@ def validate_git_commit(command: str, cwd: str) -> tuple[bool, str]:
         return True, f"⚠️ Could not validate branch: {e}"
 
 
+def is_git_branch_create_command(command: str) -> bool:
+    """
+    Detect if a bash command creates a new git branch
+
+    Handles:
+    - git checkout -b branch-name
+    - git branch branch-name
+    - git switch -c branch-name
+
+    Args:
+        command: Command to check
+
+    Returns:
+        True if command creates a branch
+    """
+    # Normalize command
+    cmd = command.strip().lower()
+
+    # Remove git prefix
+    if cmd.startswith("git "):
+        cmd = cmd[4:].strip()
+
+    # Check for branch creation patterns
+    return (
+        cmd.startswith("checkout -b ")
+        or cmd.startswith("checkout --branch ")
+        or cmd.startswith("branch ") and not any(
+            x in cmd for x in ["-d", "-D", "-m", "-M", "--delete", "--move"]
+        )
+        or cmd.startswith("switch -c ")
+        or cmd.startswith("switch --create ")
+    )
+
+
+def get_base_branch(repo_path: str) -> str:
+    """
+    Get the default base branch for the repository
+
+    Tries in order: develop, main, master
+    Returns first one that exists
+
+    Args:
+        repo_path: Path to git repository
+
+    Returns:
+        Base branch name (develop/main/master) or "develop" as fallback
+    """
+    import subprocess
+
+    for branch in ["develop", "main", "master"]:
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--verify", branch],
+                capture_output=True,
+                text=True,
+                cwd=repo_path,
+                timeout=2,
+            )
+            if result.returncode == 0:
+                return branch
+        except Exception:
+            continue
+
+    # Fallback to develop if nothing found
+    return "develop"
+
+
+def validate_git_branch_create(command: str, cwd: str) -> tuple[bool, str]:
+    """
+    Validate git branch creation operation
+
+    Warns when:
+    - Creating a claude/* branch from another claude/* branch
+    - This prevents work accumulation on long-lived feature branches
+
+    Args:
+        command: Git branch creation command
+        cwd: Current working directory
+
+    Returns:
+        Tuple of (allowed, reason)
+        - allowed: True (always - this is a warning, not a blocker)
+        - reason: Warning message if creating claude/* from claude/*
+    """
+    try:
+        # Get current branch
+        current_branch = get_current_branch(cwd)
+
+        if not current_branch:
+            return True, ""
+
+        # Check if creating a claude/* branch
+        # Extract branch name from command
+        parts = command.split()
+        branch_name = None
+
+        for i, part in enumerate(parts):
+            if part in ["-b", "--branch", "-c", "--create"]:
+                if i + 1 < len(parts):
+                    branch_name = parts[i + 1]
+                    break
+            elif part in ["branch"]:
+                # git branch <name> format
+                if i + 1 < len(parts):
+                    branch_name = parts[i + 1]
+                    break
+
+        if not branch_name:
+            return True, ""
+
+        # Check if new branch is claude/* and current is also claude/*
+        if branch_name.startswith("claude/") and is_claude_branch(current_branch, cwd):
+            # Get the actual base branch for this repo
+            base_branch = get_base_branch(cwd)
+
+            warning = (
+                f"⚠️  WARNING: Creating claude/* branch from another claude/* branch\n"
+                f"\n"
+                f"Current branch: {current_branch}\n"
+                f"New branch: {branch_name}\n"
+                f"\n"
+                f"⚠️  This can lead to lost work if you:\n"
+                f"   1. Create PR: {branch_name} → {current_branch}\n"
+                f"   2. Merge that PR\n"
+                f"   3. Delete {current_branch} before its PR to {base_branch} gets merged\n"
+                f"\n"
+                f"💡 Safer workflow:\n"
+                f"   1. Switch to {base_branch}: git checkout {base_branch}\n"
+                f"   2. Create branch: git checkout -b {branch_name}\n"
+                f"   3. All PRs go directly: {branch_name} → {base_branch}\n"
+                f"\n"
+                f"Allowing operation, but be careful with merge workflow!"
+            )
+            return True, warning
+
+        return True, ""
+
+    except Exception as e:
+        # On error, be permissive
+        return True, f"⚠️ Could not validate branch creation: {e}"
+
+
 def is_git_push_command(command: str) -> bool:
     """
     Detect if a bash command is a git push operation
@@ -864,6 +1007,7 @@ def validate_bash_command(hook_data: dict) -> bool:
     - Git commit operations (must be on claude/* branch)
     - Git merge operations (must be on claude/* branch)
     - Git push operations (must not push to main/master/production)
+    - Git branch creation (warns when creating claude/* from claude/*)
     - Swift quality tools (must use -smart versions)
 
     Handles chained commands (e.g., cmd1 && cmd2 && cmd3)
@@ -946,6 +1090,14 @@ def validate_bash_command(hook_data: dict) -> bool:
                 return False
             else:
                 # Log that push is allowed
+                print(reason, file=sys.stderr)
+
+        # Check for git branch creation (warning only)
+        if is_git_branch_create_command(subcmd):
+            allowed, reason = validate_git_branch_create(subcmd, cwd)
+
+            # Always allowed, but may have warning
+            if reason:
                 print(reason, file=sys.stderr)
 
     # All subcommands validated successfully

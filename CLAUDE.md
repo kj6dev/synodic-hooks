@@ -202,8 +202,47 @@ This enables:
 5. **Stop** - Session completion (sound, cleanup)
 6. **SubagentStop** - Subagent task completion
 7. **PreCompact** - Before context compaction (archive, save)
-8. **SessionStart** - Session initialization
+8. **SessionStart** - Session initialization (see below for details)
 9. **SessionEnd** - Session finalization (save state, reports)
+
+### SessionStart Hook Responsibilities
+
+The SessionStart hook runs when a Claude Code session starts or resumes:
+
+1. **Sync CLAUDE.md Template** - Auto-updates `.claude/sessions/CLAUDE.md` in each repository to ensure consistent documentation about committing session files
+2. **Sync .gitattributes Rule** - Auto-adds linguist-generated rule to collapse session files in GitHub PRs
+3. **Check Uncommitted Session Files** - Warns about uncommitted `.claude/sessions/*.yml` files from previous work to prevent losing context
+4. **Clean Up Empty Branches** - Removes empty or merged `claude/*` branches from previous sessions
+5. **Report Session Context** - Shows current branch, uncommitted changes, and existing claude/* branches
+
+**Template Sync**:
+- Template file: `~/Developer/synodic-hooks/templates/sessions-CLAUDE.md`
+- Target location: `<repo-root>/.claude/sessions/CLAUDE.md`
+- Only updates if template has changed (hash-based comparison)
+- Creates directory structure if needed
+
+**GitAttributes Sync**:
+- Auto-adds `.claude/sessions/*.yml linguist-generated=true` to `.gitattributes`
+- Preserves existing .gitattributes content
+- Idempotent - only adds if rule doesn't exist
+- Creates .gitattributes if it doesn't exist
+
+**Uncommitted Files Warning**:
+```
+⚠️ ============================================================
+⚠️ 📋 Uncommitted session files from previous work:
+   .claude/sessions/20251116-105715.yml
+   .claude/sessions/20251116-171730.yml
+⚠️
+⚠️ 💡 Consider committing these to preserve development context
+⚠️    See .claude/sessions/CLAUDE.md for details
+⚠️ ============================================================
+```
+
+This warning appears at session start (not end) because:
+- Early notification when action can be taken
+- Reminds about work from previous sessions
+- Non-blocking - session continues regardless
 
 ## Session File Logging
 
@@ -300,6 +339,16 @@ new: |
 - Provides pattern analysis data for skill development
 - Creates audit trail of AI-assisted development
 - Enables future preference discovery and rule extraction
+
+**Reducing PR Noise**:
+Session files can balloon PR sizes. The SessionStart hook automatically adds this rule to `.gitattributes`:
+
+```gitattributes
+# Collapse session files in GitHub PR diffs
+.claude/sessions/*.yml linguist-generated=true
+```
+
+This keeps session files committed (preserving context) while reducing visual noise during code review. The rule is auto-synced to all repositories on session start.
 
 **Infinite Loop Prevention**:
 Session files themselves are excluded from logging to prevent:

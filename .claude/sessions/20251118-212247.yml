@@ -1,0 +1,645 @@
+---
+# Session Metadata
+session_id: claude-20251118-212247
+started: 2025-11-18T21:22:47.617221
+repo: /Users/bryancostanza/Developer/synodic-hooks
+branch: develop
+edit_count: 0
+---
+
+---
+# Edit 2025-11-18T21:22:47.617763
+time: 2025-11-18T21:22:47.617766
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py
+change_type: unknown
+user_prompt: |
+  just 1 for now is good
+old: |
+          hook_data = get_hook_data()
+          tool_name = get_tool_name(hook_data)
+  
+          # Handle git commit tracking (Phase 4)
+          if tool_name == "Bash":
+              tool_input = hook_data.get("tool_input", {})
+              command = tool_input.get("command", "")
+              cwd = hook_data.get("cwd", ".")
+  
+              if is_git_commit_command(command):
+                  record_commit_to_session(cwd)
+  
+              # Don't process Bash commands for formatting
+              sys.exit(0)
+new: |
+          hook_data = get_hook_data()
+          tool_name = get_tool_name(hook_data)
+  
+          # Don't process Bash commands for formatting
+          if tool_name == "Bash":
+              sys.exit(0)
+
+---
+# Edit 2025-11-18T21:23:04.121645
+time: 2025-11-18T21:23:04.121659
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py
+change_type: unknown
+user_prompt: |
+  just 1 for now is good
+old: |
+  def is_git_commit_command(command: str) -> bool:
+      """
+      Detect if a bash command is a git commit operation
+  
+      Handles chained commands (e.g., "git add -A && git commit -m 'msg'")
+      and complex shell syntax.
+  
+      Args:
+          command: Bash command string
+  
+      Returns:
+          True if this is a git commit operation
+      """
+      # Use regex to detect git commit in command (handles chained commands)
+      return bool(re.search(r"\bgit\b.*\bcommit\b", command))
+  
+  
+  def find_git_root(cwd: str) -> Path | None:
+      """
+      Find the git repository root
+  
+      Args:
+          cwd: Current working directory
+  
+      Returns:
+          Path to git root, or None if not in a git repo
+      """
+      try:
+          result = subprocess.run(
+              ["git", "rev-parse", "--show-toplevel"],
+              capture_output=True,
+              text=True,
+              cwd=cwd,
+              timeout=5,
+          )
+          if result.returncode == 0:
+              return Path(result.stdout.strip())
+      except Exception:
+          pass
+  
+      return None
+  
+  
+  def record_commit_to_session(cwd: str) -> None:
+      """
+      Record the latest commit to the current session file
+  
+      Called after a git commit command succeeds.
+      Appends commit metadata to the session file.
+  
+      Args:
+          cwd: Current working directory (repo)
+      """
+      try:
+          # Find git root
+          git_root = find_git_root(cwd)
+          if not git_root:
+              return
+  
+          # Check if session file exists
+          claude_dir = git_root / ".claude"
+          current_session_file = claude_dir / "current_session"
+  
+          if not current_session_file.exists():
+              return  # No active session
+  
+          # Read session ID
+          session_id = current_session_file.read_text().strip()
+  
+          # Get session file
+          session_filename = session_id.replace("claude-", "") + ".yml"
+          session_file = claude_dir / "sessions" / session_filename
+  
+          if not session_file.exists():
+              return  # Session file doesn't exist
+  
+          # Get latest commit info
+          result = subprocess.run(
+              ["git", "log", "-1", "--format=%H%n%s%n%ai"],
+              capture_output=True,
+              text=True,
+              cwd=str(git_root),
+              timeout=5,
+          )
+  
+          if result.returncode != 0:
+              return  # Couldn't get commit info
+  
+          lines = result.stdout.strip().split("\n")
+          if len(lines) < 3:
+              return
+  
+          commit_sha = lines[0]
+          commit_message = lines[1]
+          commit_time = lines[2]
+  
+          # Append commit record to session file
+          with session_file.open("a") as f:
+              f.write("---\n")
+              f.write(f"# Commit {commit_sha[:8]}\n")
+              f.write(f"commit_sha: {commit_sha}\n")
+              f.write(f"commit_time: {commit_time}\n")
+              f.write("commit_message: |\n")
+              for line in commit_message.splitlines():
+                  f.write(f"  {line}\n")
+              f.write("\n")
+  
+      except Exception:
+          # Silent failure - don't block workflow
+          pass
+  
+  
+  def main():
+new: |
+  def main():
+
+---
+# Edit 2025-11-18T21:23:10.053154
+time: 2025-11-18T21:23:10.053166
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py
+change_type: unknown
+user_prompt: |
+  just 1 for now is good
+old: |
+  #!/usr/bin/env python3
+  """
+  PostToolUse Hook for Claude Code
+  Routes file edits to appropriate formatters based on file type
+  Tracks git commits for session metadata (Phase 4)
+  """
+new: |
+  #!/usr/bin/env python3
+  """
+  PostToolUse Hook for Claude Code
+  Routes file edits to appropriate formatters based on file type
+  """
+
+---
+# Edit 2025-11-18T21:23:47.145338
+time: 2025-11-18T21:23:47.145348
+file: /Users/bryancostanza/Developer/synodic-hooks/CLAUDE.md
+change_type: docs
+user_prompt: |
+  just 1 for now is good
+old: |
+  ### Session Files and Git
+  
+  **CRITICAL**: Session files should be committed with code changes.
+  
+  **Policy**:
+  - ✅ **DO commit** `.claude/sessions/` files with your changes
+  - ✅ Session files provide valuable context for code changes
+  - ✅ Multiple projects can commit their own session files independently
+  - ❌ **DO NOT** add `.claude/` to `.gitignore`
+  
+  **Why commit session files?**
+  - Documents the intent behind code changes (user prompts)
+  - Provides pattern analysis data for skill development
+  - Creates audit trail of AI-assisted development
+  - Enables future preference discovery and rule extraction
+  
+  **Infinite Loop Prevention**:
+  Session files themselves are excluded from logging to prevent:
+  1. Commit code + session file
+  2. Hook logs commit → updates session file
+  3. Session file dirty again → cycle repeats
+  
+  The exclude filter breaks this loop by not logging edits to `.claude/sessions/` or `.claude/current_session`.
+new: |
+  ### Session Files and Git
+  
+  **CRITICAL**: Session files should be committed with code changes.
+  
+  **Policy**:
+  - ✅ **DO commit** `.claude/sessions/` files with your changes
+  - ✅ Session files provide valuable context for code changes
+  - ✅ Multiple projects can commit their own session files independently
+  - ❌ **DO NOT** add `.claude/` to `.gitignore`
+  
+  **Why commit session files?**
+  - Documents the intent behind code changes (user prompts)
+  - Provides pattern analysis data for skill development
+  - Creates audit trail of AI-assisted development
+  - Enables future preference discovery and rule extraction
+  
+  **Reducing PR Noise**:
+  Session files can balloon PR sizes. To collapse them in GitHub PR views, add to `.gitattributes`:
+  
+  ```gitattributes
+  # Collapse session files in GitHub PR diffs
+  .claude/sessions/*.yml linguist-generated=true
+  ```
+  
+  This keeps session files committed (preserving context) while reducing visual noise during code review.
+  
+  **Infinite Loop Prevention**:
+  Session files themselves are excluded from logging to prevent:
+  1. Commit code + session file
+  2. Hook logs commit → updates session file
+  3. Session file dirty again → cycle repeats
+  
+  The exclude filter breaks this loop by not logging edits to `.claude/sessions/` or `.claude/current_session`.
+
+---
+# Edit 2025-11-18T21:28:15.228680
+time: 2025-11-18T21:28:15.228693
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/session/session_files.py
+change_type: unknown
+user_prompt: |
+  The other projects won't get it automatically? That seems like it would be important for uus to do if we can
+old: |
+  """
+  Session file management utilities
+  
+  Handles:
+  1. Syncing CLAUDE.md template to .claude/sessions/ directories
+  2. Checking for uncommitted session files
+  """
+  
+  import hashlib
+  import subprocess
+  import sys
+  from pathlib import Path
+  
+  from shared.hook_utils import emit_success, emit_warning
+new: |
+  """
+  Session file management utilities
+  
+  Handles:
+  1. Syncing CLAUDE.md template to .claude/sessions/ directories
+  2. Syncing .gitattributes rule for session files
+  3. Checking for uncommitted session files
+  """
+  
+  import hashlib
+  import subprocess
+  import sys
+  from pathlib import Path
+  
+  from shared.hook_utils import emit_success, emit_warning
+  
+  # .gitattributes rule for session files
+  GITATTRIBUTES_RULE = ".claude/sessions/*.yml linguist-generated=true"
+
+---
+# Edit 2025-11-18T21:28:31.596809
+time: 2025-11-18T21:28:31.596819
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/session/session_files.py
+change_type: unknown
+user_prompt: |
+  The other projects won't get it automatically? That seems like it would be important for uus to do if we can
+old: |
+      except Exception as e:
+          # Non-critical - just warn
+          emit_warning(f"Could not sync sessions CLAUDE.md: {e}")
+  
+  
+  def check_uncommitted_session_files(repo_root: str) -> None:
+new: |
+      except Exception as e:
+          # Non-critical - just warn
+          emit_warning(f"Could not sync sessions CLAUDE.md: {e}")
+  
+  
+  def sync_gitattributes_rule(repo_root: str) -> None:
+      """
+      Ensure .gitattributes has rule to collapse session files in GitHub PRs
+  
+      Adds or updates the linguist-generated rule for session files.
+      Preserves existing .gitattributes content.
+  
+      Args:
+          repo_root: Path to repository root
+      """
+      try:
+          repo_path = Path(repo_root)
+          gitattributes_file = repo_path / ".gitattributes"
+  
+          # Read existing content if file exists
+          existing_lines = []
+          if gitattributes_file.exists():
+              existing_lines = gitattributes_file.read_text().splitlines()
+  
+          # Check if rule already exists
+          rule_exists = any(
+              GITATTRIBUTES_RULE in line or ".claude/sessions/*.yml" in line for line in existing_lines
+          )
+  
+          if not rule_exists:
+              # Add the rule
+              if existing_lines and not existing_lines[-1].strip():
+                  # File exists but ends with blank line - append directly
+                  pass
+              elif existing_lines:
+                  # File exists with content - add blank line separator
+                  existing_lines.append("")
+  
+              # Add comment and rule
+              existing_lines.append("# Session files are valuable for historical context but should be")
+              existing_lines.append("# collapsed in GitHub PR views to reduce noise in code reviews")
+              existing_lines.append(GITATTRIBUTES_RULE)
+  
+              # Write back
+              gitattributes_file.write_text("\n".join(existing_lines) + "\n")
+              emit_success(f"✅ Added session files rule to .gitattributes")
+  
+      except Exception as e:
+          # Non-critical - just warn
+          emit_warning(f"Could not sync .gitattributes: {e}")
+  
+  
+  def check_uncommitted_session_files(repo_root: str) -> None:
+
+---
+# Edit 2025-11-18T21:28:40.997704
+time: 2025-11-18T21:28:40.997714
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/session/__init__.py
+change_type: unknown
+user_prompt: |
+  The other projects won't get it automatically? That seems like it would be important for uus to do if we can
+old: |
+  """Session management components for Claude Code"""
+  
+  from .branch_management import (
+      cleanup_empty_branches,
+      create_session_branch,
+      should_auto_create_branch,
+  )
+  from .change_handler import handle_uncommitted_changes
+  from .reporter import report_session_context
+  from .session_files import check_uncommitted_session_files, sync_sessions_claude_md
+  
+  __all__ = [
+      "check_uncommitted_session_files",
+      "cleanup_empty_branches",
+      "create_session_branch",
+      "handle_uncommitted_changes",
+      "report_session_context",
+      "should_auto_create_branch",
+      "sync_sessions_claude_md",
+  ]
+new: |
+  """Session management components for Claude Code"""
+  
+  from .branch_management import (
+      cleanup_empty_branches,
+      create_session_branch,
+      should_auto_create_branch,
+  )
+  from .change_handler import handle_uncommitted_changes
+  from .reporter import report_session_context
+  from .session_files import (
+      check_uncommitted_session_files,
+      sync_gitattributes_rule,
+      sync_sessions_claude_md,
+  )
+  
+  __all__ = [
+      "check_uncommitted_session_files",
+      "cleanup_empty_branches",
+      "create_session_branch",
+      "handle_uncommitted_changes",
+      "report_session_context",
+      "should_auto_create_branch",
+      "sync_gitattributes_rule",
+      "sync_sessions_claude_md",
+  ]
+
+---
+# Edit 2025-11-18T21:28:46.502342
+time: 2025-11-18T21:28:46.502353
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/session_start.py
+change_type: unknown
+user_prompt: |
+  The other projects won't get it automatically? That seems like it would be important for uus to do if we can
+old: |
+  from session import (
+      check_uncommitted_session_files,
+      cleanup_empty_branches,
+      create_session_branch,
+      report_session_context,
+      should_auto_create_branch,
+      sync_sessions_claude_md,
+  )
+new: |
+  from session import (
+      check_uncommitted_session_files,
+      cleanup_empty_branches,
+      create_session_branch,
+      report_session_context,
+      should_auto_create_branch,
+      sync_gitattributes_rule,
+      sync_sessions_claude_md,
+  )
+
+---
+# Edit 2025-11-18T21:28:53.728503
+time: 2025-11-18T21:28:53.728518
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/session_start.py
+change_type: unknown
+user_prompt: |
+  The other projects won't get it automatically? That seems like it would be important for uus to do if we can
+old: |
+          # 1. Sync CLAUDE.md template to .claude/sessions/
+          sync_sessions_claude_md(cwd)
+  
+          # 2. Check for uncommitted session files from previous work
+          check_uncommitted_session_files(cwd)
+new: |
+          # 1. Sync CLAUDE.md template to .claude/sessions/
+          sync_sessions_claude_md(cwd)
+  
+          # 2. Sync .gitattributes rule for session files
+          sync_gitattributes_rule(cwd)
+  
+          # 3. Check for uncommitted session files from previous work
+          check_uncommitted_session_files(cwd)
+
+---
+# Edit 2025-11-18T21:29:00.342051
+time: 2025-11-18T21:29:00.342064
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/session_start.py
+change_type: unknown
+user_prompt: |
+  The other projects won't get it automatically? That seems like it would be important for uus to do if we can
+old: |
+          # 3. Check for uncommitted session files from previous work
+          check_uncommitted_session_files(cwd)
+  
+          # 3. Clean up empty branches from previous sessions
+          cleanup_empty_branches(cwd)
+  
+          # 4. Create new session branch if appropriate
+          if should_auto_create_branch(cwd):
+              create_session_branch(cwd)
+  
+          # 5. Report context
+          report_session_context(cwd)
+new: |
+          # 3. Check for uncommitted session files from previous work
+          check_uncommitted_session_files(cwd)
+  
+          # 4. Clean up empty branches from previous sessions
+          cleanup_empty_branches(cwd)
+  
+          # 5. Create new session branch if appropriate
+          if should_auto_create_branch(cwd):
+              create_session_branch(cwd)
+  
+          # 6. Report context
+          report_session_context(cwd)
+
+---
+# Edit 2025-11-18T21:29:05.652568
+time: 2025-11-18T21:29:05.652579
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/session_start.py
+change_type: unknown
+user_prompt: |
+  The other projects won't get it automatically? That seems like it would be important for uus to do if we can
+old: |
+  from session import (
+      check_uncommitted_session_files,
+      cleanup_empty_branches,
+      create_session_branch,
+      report_session_context,
+      should_auto_create_branch,
+      sync_sessions_claude_md,
+  )
+new: |
+  from session import (
+      check_uncommitted_session_files,
+      cleanup_empty_branches,
+      create_session_branch,
+      report_session_context,
+      should_auto_create_branch,
+      sync_gitattributes_rule,
+      sync_sessions_claude_md,
+  )
+
+---
+# Edit 2025-11-18T21:29:15.245710
+time: 2025-11-18T21:29:15.245720
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/session_start.py
+change_type: unknown
+user_prompt: |
+  The other projects won't get it automatically? That seems like it would be important for uus to do if we can
+old: |
+  """
+  SessionStart Hook for Claude Code
+  
+  Runs when a Claude Code session starts or resumes.
+  
+  Responsibilities:
+  1. Sync CLAUDE.md template to .claude/sessions/ directories
+  2. Check for uncommitted session files from previous work
+  3. Clean up empty claude/* branches
+  4. Provide session context to user
+  
+  NOTE: Auto-branch creation is DISABLED. Claude must explicitly create
+  branches with meaningful names to prevent work accumulation on long-lived
+  feature branches.
+  
+  Self-healing: Never blocks session start. All errors emit warnings only.
+  """
+new: |
+  """
+  SessionStart Hook for Claude Code
+  
+  Runs when a Claude Code session starts or resumes.
+  
+  Responsibilities:
+  1. Sync CLAUDE.md template to .claude/sessions/ directories
+  2. Sync .gitattributes rule for session files (collapses in GitHub PRs)
+  3. Check for uncommitted session files from previous work
+  4. Clean up empty claude/* branches
+  5. Provide session context to user
+  
+  NOTE: Auto-branch creation is DISABLED. Claude must explicitly create
+  branches with meaningful names to prevent work accumulation on long-lived
+  feature branches.
+  
+  Self-healing: Never blocks session start. All errors emit warnings only.
+  """
+
+---
+# Edit 2025-11-18T21:30:16.323237
+time: 2025-11-18T21:30:16.323247
+file: /Users/bryancostanza/Developer/synodic-hooks/CLAUDE.md
+change_type: docs
+user_prompt: |
+  The other projects won't get it automatically? That seems like it would be important for uus to do if we can
+old: |
+  ### SessionStart Hook Responsibilities
+  
+  The SessionStart hook runs when a Claude Code session starts or resumes:
+  
+  1. **Sync CLAUDE.md Template** - Auto-updates `.claude/sessions/CLAUDE.md` in each repository to ensure consistent documentation about committing session files
+  2. **Check Uncommitted Session Files** - Warns about uncommitted `.claude/sessions/*.yml` files from previous work to prevent losing context
+  3. **Clean Up Empty Branches** - Removes empty or merged `claude/*` branches from previous sessions
+  4. **Report Session Context** - Shows current branch, uncommitted changes, and existing claude/* branches
+  
+  **Template Sync**:
+  - Template file: `~/Developer/synodic-hooks/templates/sessions-CLAUDE.md`
+  - Target location: `<repo-root>/.claude/sessions/CLAUDE.md`
+  - Only updates if template has changed (hash-based comparison)
+  - Creates directory structure if needed
+new: |
+  ### SessionStart Hook Responsibilities
+  
+  The SessionStart hook runs when a Claude Code session starts or resumes:
+  
+  1. **Sync CLAUDE.md Template** - Auto-updates `.claude/sessions/CLAUDE.md` in each repository to ensure consistent documentation about committing session files
+  2. **Sync .gitattributes Rule** - Auto-adds linguist-generated rule to collapse session files in GitHub PRs
+  3. **Check Uncommitted Session Files** - Warns about uncommitted `.claude/sessions/*.yml` files from previous work to prevent losing context
+  4. **Clean Up Empty Branches** - Removes empty or merged `claude/*` branches from previous sessions
+  5. **Report Session Context** - Shows current branch, uncommitted changes, and existing claude/* branches
+  
+  **Template Sync**:
+  - Template file: `~/Developer/synodic-hooks/templates/sessions-CLAUDE.md`
+  - Target location: `<repo-root>/.claude/sessions/CLAUDE.md`
+  - Only updates if template has changed (hash-based comparison)
+  - Creates directory structure if needed
+  
+  **GitAttributes Sync**:
+  - Auto-adds `.claude/sessions/*.yml linguist-generated=true` to `.gitattributes`
+  - Preserves existing .gitattributes content
+  - Idempotent - only adds if rule doesn't exist
+  - Creates .gitattributes if it doesn't exist
+
+---
+# Edit 2025-11-18T21:30:25.351231
+time: 2025-11-18T21:30:25.351240
+file: /Users/bryancostanza/Developer/synodic-hooks/CLAUDE.md
+change_type: docs
+user_prompt: |
+  The other projects won't get it automatically? That seems like it would be important for uus to do if we can
+old: |
+  **Reducing PR Noise**:
+  Session files can balloon PR sizes. To collapse them in GitHub PR views, add to `.gitattributes`:
+  
+  ```gitattributes
+  # Collapse session files in GitHub PR diffs
+  .claude/sessions/*.yml linguist-generated=true
+  ```
+  
+  This keeps session files committed (preserving context) while reducing visual noise during code review.
+new: |
+  **Reducing PR Noise**:
+  Session files can balloon PR sizes. The SessionStart hook automatically adds this rule to `.gitattributes`:
+  
+  ```gitattributes
+  # Collapse session files in GitHub PR diffs
+  .claude/sessions/*.yml linguist-generated=true
+  ```
+  
+  This keeps session files committed (preserving context) while reducing visual noise during code review. The rule is auto-synced to all repositories on session start.
+

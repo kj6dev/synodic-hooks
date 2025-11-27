@@ -205,6 +205,48 @@ This enables:
 8. **SessionStart** - Session initialization (see below for details)
 9. **SessionEnd** - Session finalization (save state, reports)
 
+### PreToolUse Hook Responsibilities
+
+The PreToolUse hook runs before Claude executes any tool:
+
+1. **Log File Edits** - Records all text file edits to per-repo session files for pattern analysis
+2. **Git Branch Protection** - Blocks commits/merges to non-claude/* branches (except initial commit)
+3. **Push Protection** - Blocks direct pushes to protected branches (main, master, production)
+4. **Branch Creation Warnings** - Warns when creating claude/* branches from other claude/* branches
+5. **Swift Tool Enforcement** - Blocks bare `swiftlint`/`swiftformat` commands (must use `-smart` versions)
+
+### PostToolUse Hook Responsibilities
+
+The PostToolUse hook runs after Claude executes any tool:
+
+1. **File Formatting** - Runs language-specific formatters (swiftformat-smart, ruff, etc.)
+2. **Quality Checks** - Runs linters after file edits (swiftlint-smart, etc.)
+3. **Edit Tracking** - Tracks edited files for status line display
+4. **Batch Edit Hints** - Suggests batch editing after multiple Swift file edits
+5. **Swift Disable Directive Warning** - Warns when adding `swiftlint:disable` or `swiftformat:disable` directives
+
+**Swift Disable Directive Warning**:
+- Triggers on Edit operations to `.swift` files
+- Detects pattern: `swift*:disable` (matches swiftlint:disable, swiftformat:disable, etc.)
+- Only warns when ADDING a new directive (not when editing code with existing directives)
+- Non-blocking warning reminds to:
+  1. Have explicit user approval, OR
+  2. Include justification comment explaining WHY the directive is needed
+
+```
+⚠️  ============================================================
+⚠️  Adding Swift lint/format disable directive
+⚠️  File: /path/to/Example.swift
+⚠️  Directive: swiftlint:disable line_length...
+⚠️
+⚠️  Before proceeding, ensure ONE of:
+⚠️    1. User explicitly approved this disable directive
+⚠️    2. A justification comment explains WHY it's needed
+⚠️
+⚠️  Example: // swiftlint:disable:next rule_name - [explain why]
+⚠️  ============================================================
+```
+
 ### SessionStart Hook Responsibilities
 
 The SessionStart hook runs when a Claude Code session starts or resumes:

@@ -667,9 +667,8 @@ def is_git_branch_create_command(command: str) -> bool:
     return (
         cmd.startswith("checkout -b ")
         or cmd.startswith("checkout --branch ")
-        or cmd.startswith("branch ") and not any(
-            x in cmd for x in ["-d", "-D", "-m", "-M", "--delete", "--move"]
-        )
+        or cmd.startswith("branch ")
+        and not any(x in cmd for x in ["-d", "-D", "-m", "-M", "--delete", "--move"])
         or cmd.startswith("switch -c ")
         or cmd.startswith("switch --create ")
     )

@@ -1,0 +1,1078 @@
+---
+# Session Metadata
+session_id: claude-20251127-071653
+started: 2025-11-27T07:16:53.427878
+repo: /Users/bryancostanza/Developer/synodic-hooks
+branch: develop
+edit_count: 0
+---
+
+---
+# Edit 2025-11-27T07:16:53.428336
+time: 2025-11-27T07:16:53.428338
+file: /Users/bryancostanza/.claude/hooks/post_tool_use.py
+change_type: unknown
+user_prompt: |
+  looking great. idea: can there be a link to the last three files touched by the edit tool with a link that does `open path/to/file.xyz`
+old: |
+  def track_swift_edits_and_suggest_batching(file_path: Path) -> None:
+      """
+      Track Swift file edits and suggest batch editing after threshold
+  
+      Creates session-specific counter and shows hint once after 3 Swift edits.
+      This helps Claude optimize workflow when fixing many violations.
+      """
+      if not file_path.suffix == ".swift":
+          return
+  
+      # Get session ID from environment (set by Claude Code)
+      session_id = os.environ.get("CLAUDE_SESSION_ID", "default")
+      counter_file = Path.home() / f".claude-swift-edits-{session_id}.count"
+  
+      try:
+          # Read current count
+          count = 0
+          if counter_file.exists():
+              count = int(counter_file.read_text().strip())
+  
+          count += 1
+  
+          # Write updated count
+          counter_file.write_text(str(count))
+  
+          # Show hint once after 3 edits
+          if count == 3:
+              print()
+              print("💡 Performance Tip: Consider batch editing for similar changes")
+              print(
+                  "   Hooks run after every Edit - batching multiple files into one Edit"
+              )
+              print("   operation reduces hook overhead significantly.")
+              print()
+              print("   Example: Instead of editing 10 files individually,")
+              print('   ask me to "batch edit all files to fix trailing whitespace"')
+              print()
+  
+      except (ValueError, OSError):
+          # Silently fail - this is just a helpful hint
+          pass
+new: |
+  def track_edited_file(file_path: Path) -> None:
+      """
+      Track edited files for status line display
+  
+      Maintains a rolling list of the last 10 edited files in session-specific file.
+      Status line can read this to show the most recently edited files.
+      """
+      # Get session ID from environment (set by Claude Code)
+      session_id = os.environ.get("CLAUDE_SESSION_ID", "default")
+      tracker_file = Path.home() / ".claude" / f"recent-edits-{session_id}.txt"
+  
+      try:
+          # Read existing files (keep last 10)
+          existing_files = []
+          if tracker_file.exists():
+              existing_files = [
+                  line.strip()
+                  for line in tracker_file.read_text().splitlines()
+                  if line.strip()
+              ]
+  
+          # Remove this file if it already exists (to move it to top)
+          file_str = str(file_path.resolve())
+          existing_files = [f for f in existing_files if f != file_str]
+  
+          # Add new file to top
+          existing_files.insert(0, file_str)
+  
+          # Keep only last 10 files
+          existing_files = existing_files[:10]
+  
+          # Write back
+          tracker_file.parent.mkdir(parents=True, exist_ok=True)
+          tracker_file.write_text("\n".join(existing_files) + "\n")
+  
+      except (OSError, Exception):
+          # Silently fail - this is just for status line display
+          pass
+  
+  
+  def track_swift_edits_and_suggest_batching(file_path: Path) -> None:
+      """
+      Track Swift file edits and suggest batch editing after threshold
+  
+      Creates session-specific counter and shows hint once after 3 Swift edits.
+      This helps Claude optimize workflow when fixing many violations.
+      """
+      if not file_path.suffix == ".swift":
+          return
+  
+      # Get session ID from environment (set by Claude Code)
+      session_id = os.environ.get("CLAUDE_SESSION_ID", "default")
+      counter_file = Path.home() / f".claude-swift-edits-{session_id}.count"
+  
+      try:
+          # Read current count
+          count = 0
+          if counter_file.exists():
+              count = int(counter_file.read_text().strip())
+  
+          count += 1
+  
+          # Write updated count
+          counter_file.write_text(str(count))
+  
+          # Show hint once after 3 edits
+          if count == 3:
+              print()
+              print("💡 Performance Tip: Consider batch editing for similar changes")
+              print(
+                  "   Hooks run after every Edit - batching multiple files into one Edit"
+              )
+              print("   operation reduces hook overhead significantly.")
+              print()
+              print("   Example: Instead of editing 10 files individually,")
+              print('   ask me to "batch edit all files to fix trailing whitespace"')
+              print()
+  
+      except (ValueError, OSError):
+          # Silently fail - this is just a helpful hint
+          pass
+
+---
+# Edit 2025-11-27T07:16:59.854433
+time: 2025-11-27T07:16:59.854447
+file: /Users/bryancostanza/.claude/hooks/post_tool_use.py
+change_type: unknown
+user_prompt: |
+  looking great. idea: can there be a link to the last three files touched by the edit tool with a link that does `open path/to/file.xyz`
+old: |
+              try:
+                  # Track Swift edits and suggest batching if appropriate
+                  track_swift_edits_and_suggest_batching(file_path)
+  
+                  success = process_file(file_path, project_dir)
+                  all_success = all_success and success
+              except Exception as e:
+                  print(f"⚠️  Error processing {file_path}: {e}")
+                  all_success = False
+new: |
+              try:
+                  # Track this edit for status line display
+                  track_edited_file(file_path)
+  
+                  # Track Swift edits and suggest batching if appropriate
+                  track_swift_edits_and_suggest_batching(file_path)
+  
+                  success = process_file(file_path, project_dir)
+                  all_success = all_success and success
+              except Exception as e:
+                  print(f"⚠️  Error processing {file_path}: {e}")
+                  all_success = False
+
+---
+# Edit 2025-11-27T07:27:44.517965
+time: 2025-11-27T07:27:44.517977
+file: /Users/bryancostanza/.claude/hooks/post_tool_use.py
+change_type: unknown
+user_prompt: |
+  It is showing the files now but it looks like it's showing the last 3 files edited globally, but I do want it repo-scoped. Can follow a rule very similar to the current session logging hook but we just don't need to keep track of the session 
+old: |
+  def track_edited_file(file_path: Path) -> None:
+      """
+      Track edited files for status line display
+  
+      Maintains a rolling list of the last 10 edited files in session-specific file.
+      Status line can read this to show the most recently edited files.
+      """
+      # Get session ID from environment (set by Claude Code)
+      session_id = os.environ.get("CLAUDE_SESSION_ID", "default")
+      tracker_file = Path.home() / ".claude" / f"recent-edits-{session_id}.txt"
+  
+      try:
+          # Read existing files (keep last 10)
+          existing_files = []
+          if tracker_file.exists():
+              existing_files = [
+                  line.strip()
+                  for line in tracker_file.read_text().splitlines()
+                  if line.strip()
+              ]
+  
+          # Remove this file if it already exists (to move it to top)
+          file_str = str(file_path.resolve())
+          existing_files = [f for f in existing_files if f != file_str]
+  
+          # Add new file to top
+          existing_files.insert(0, file_str)
+  
+          # Keep only last 10 files
+          existing_files = existing_files[:10]
+  
+          # Write back
+          tracker_file.parent.mkdir(parents=True, exist_ok=True)
+          tracker_file.write_text("\n".join(existing_files) + "\n")
+  
+      except (OSError, Exception):
+          # Silently fail - this is just for status line display
+          pass
+new: |
+  def get_repo_root(file_path: Path) -> Path | None:
+      """Find git repository root for a file path"""
+      import subprocess
+  
+      try:
+          result = subprocess.run(
+              ["git", "-C", str(file_path.parent), "rev-parse", "--show-toplevel"],
+              capture_output=True,
+              text=True,
+              timeout=5,
+          )
+          if result.returncode == 0:
+              return Path(result.stdout.strip())
+      except (subprocess.TimeoutExpired, FileNotFoundError):
+          pass
+      return None
+  
+  
+  def get_repo_tracker_file(repo_root: Path) -> Path:
+      """Get tracker file path for a repository (using hash of repo path)"""
+      import hashlib
+  
+      repo_hash = hashlib.md5(str(repo_root).encode()).hexdigest()[:12]
+      return Path.home() / ".claude" / f"recent-edits-{repo_hash}.txt"
+  
+  
+  def track_edited_file(file_path: Path) -> None:
+      """
+      Track edited files for status line display (repo-scoped)
+  
+      Maintains a rolling list of the last 10 edited files per repository.
+      Status line can read this to show the most recently edited files.
+      """
+      try:
+          # Find repo root for this file
+          repo_root = get_repo_root(file_path)
+          if repo_root is None:
+              return  # Not in a git repo, skip tracking
+  
+          tracker_file = get_repo_tracker_file(repo_root)
+  
+          # Read existing files (keep last 10)
+          existing_files = []
+          if tracker_file.exists():
+              existing_files = [
+                  line.strip()
+                  for line in tracker_file.read_text().splitlines()
+                  if line.strip()
+              ]
+  
+          # Remove this file if it already exists (to move it to top)
+          file_str = str(file_path.resolve())
+          existing_files = [f for f in existing_files if f != file_str]
+  
+          # Add new file to top
+          existing_files.insert(0, file_str)
+  
+          # Keep only last 10 files
+          existing_files = existing_files[:10]
+  
+          # Write back
+          tracker_file.parent.mkdir(parents=True, exist_ok=True)
+          tracker_file.write_text("\n".join(existing_files) + "\n")
+  
+      except (OSError, Exception):
+          # Silently fail - this is just for status line display
+          pass
+
+---
+# Edit 2025-11-27T10:39:28.861229
+time: 2025-11-27T10:39:28.861239
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/pre_tool_use.py
+change_type: style
+user_prompt: |
+  Never mind that for now I can't track down exactly what's going on and it's not a big deal.
+  
+  What I do want us to do now is create a hook for the edit tool for Swift files. When you write a Swift lint or Swift format or Swift lint custom disable directive, we should send a message to CC that says "Make sure that you've been told by the user directly to do this, the user approved this,  or that you are including justification for it in a comment." Could do match something like `swift.*:disable[ :]`
+old: |
+  """
+  PreToolUse Hook for Claude Code
+  
+  Runs before Claude executes any tool.
+  
+  Responsibilities:
+  1. Log Swift file edits for pattern analysis
+  2. Detect git commit, merge, and push operations
+  3. Enforce branch protection (only allow commits/merges to claude/* branches)
+  4. Prevent direct pushes to protected branches (main, master, production)
+  5. Warn when creating claude/* branches from other claude/* branches
+  6. Handle chained commands (e.g., cmd1 && cmd2 && cmd3)
+  
+  Self-healing: Blocks dangerous operations but provides clear guidance
+  """
+new: |
+  """
+  PreToolUse Hook for Claude Code
+  
+  Runs before Claude executes any tool.
+  
+  Responsibilities:
+  1. Log Swift file edits for pattern analysis
+  2. Detect git commit, merge, and push operations
+  3. Enforce branch protection (only allow commits/merges to claude/* branches)
+  4. Prevent direct pushes to protected branches (main, master, production)
+  5. Warn when creating claude/* branches from other claude/* branches
+  6. Handle chained commands (e.g., cmd1 && cmd2 && cmd3)
+  7. Warn when adding SwiftLint/SwiftFormat disable directives without justification
+  
+  Self-healing: Blocks dangerous operations but provides clear guidance
+  """
+
+---
+# Edit 2025-11-27T10:39:36.415411
+time: 2025-11-27T10:39:36.415419
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/pre_tool_use.py
+change_type: style
+user_prompt: |
+  Never mind that for now I can't track down exactly what's going on and it's not a big deal.
+  
+  What I do want us to do now is create a hook for the edit tool for Swift files. When you write a Swift lint or Swift format or Swift lint custom disable directive, we should send a message to CC that says "Make sure that you've been told by the user directly to do this, the user approved this,  or that you are including justification for it in a comment." Could do match something like `swift.*:disable[ :]`
+old: |
+  from shared.hook_utils import (
+      emit_error,
+      emit_info,
+      format_hook_error,
+      get_bash_command,
+      get_hook_data,
+      get_tool_input,
+      get_tool_name,
+  )
+new: |
+  from shared.hook_utils import (
+      emit_error,
+      emit_info,
+      emit_warning,
+      format_hook_error,
+      get_bash_command,
+      get_hook_data,
+      get_tool_input,
+      get_tool_name,
+  )
+
+---
+# Edit 2025-11-27T10:39:47.760593
+time: 2025-11-27T10:39:47.760602
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/pre_tool_use.py
+change_type: style
+user_prompt: |
+  Never mind that for now I can't track down exactly what's going on and it's not a big deal.
+  
+  What I do want us to do now is create a hook for the edit tool for Swift files. When you write a Swift lint or Swift format or Swift lint custom disable directive, we should send a message to CC that says "Make sure that you've been told by the user directly to do this, the user approved this,  or that you are including justification for it in a comment." Could do match something like `swift.*:disable[ :]`
+old: |
+  from shared.hook_utils import (
+      emit_error,
+      emit_info,
+      format_hook_error,
+      get_bash_command,
+      get_hook_data,
+      get_tool_input,
+      get_tool_name,
+  )
+new: |
+  from shared.hook_utils import (
+      emit_error,
+      emit_info,
+      emit_warning,
+      format_hook_error,
+      get_bash_command,
+      get_hook_data,
+      get_tool_input,
+      get_tool_name,
+  )
+
+---
+# Edit 2025-11-27T10:40:36.474461
+time: 2025-11-27T10:40:36.474474
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/pre_tool_use.py
+change_type: style
+user_prompt: |
+  Never mind that for now I can't track down exactly what's going on and it's not a big deal.
+  
+  What I do want us to do now is create a hook for the edit tool for Swift files. When you write a Swift lint or Swift format or Swift lint custom disable directive, we should send a message to CC that says "Make sure that you've been told by the user directly to do this, the user approved this,  or that you are including justification for it in a comment." Could do match something like `swift.*:disable[ :]`
+old: |
+      return True
+  
+  
+  def find_git_root(cwd: str) -> Path | None:
+new: |
+      return True
+  
+  
+  # Pattern to match Swift disable directives
+  # Matches: swiftlint:disable, swiftformat:disable, swiftlint:disable:next, etc.
+  SWIFT_DISABLE_PATTERN = re.compile(r"swift\w*:disable[ :]", re.IGNORECASE)
+  
+  
+  def check_swift_disable_directive(hook_data: dict) -> None:
+      """
+      Check if an Edit adds a SwiftLint/SwiftFormat disable directive
+  
+      Emits a warning to remind Claude to:
+      - Have explicit user approval, OR
+      - Include justification in a comment
+  
+      This is a warning only - does not block the edit.
+  
+      Args:
+          hook_data: Hook event data
+      """
+      tool_name = get_tool_name(hook_data)
+      if tool_name != "Edit":
+          return
+  
+      tool_input = get_tool_input(hook_data)
+      file_path = tool_input.get("file_path", "")
+      new_string = tool_input.get("new_string", "")
+      old_string = tool_input.get("old_string", "")
+  
+      # Only check Swift files
+      if not file_path.lower().endswith(".swift"):
+          return
+  
+      # Check if adding a new disable directive (not already present in old_string)
+      new_has_disable = SWIFT_DISABLE_PATTERN.search(new_string)
+      old_has_disable = SWIFT_DISABLE_PATTERN.search(old_string)
+  
+      # Only warn if this edit is ADDING a disable directive
+      if new_has_disable and not old_has_disable:
+          # Find the actual directive for context
+          match = SWIFT_DISABLE_PATTERN.search(new_string)
+          directive_context = new_string[match.start():match.start() + 50] if match else ""
+  
+          emit_warning("=" * 60)
+          emit_warning("Adding Swift lint/format disable directive")
+          emit_warning(f"File: {file_path}")
+          emit_warning(f"Directive: {directive_context}...")
+          emit_warning("")
+          emit_warning("Before proceeding, ensure ONE of:")
+          emit_warning("  1. User explicitly approved this disable directive")
+          emit_warning("  2. A justification comment explains WHY it's needed")
+          emit_warning("")
+          emit_warning("Example: // swiftlint:disable:next line_length - URL too long")
+          emit_warning("=" * 60)
+  
+  
+  def find_git_root(cwd: str) -> Path | None:
+
+---
+# Edit 2025-11-27T10:40:43.935129
+time: 2025-11-27T10:40:43.935144
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/pre_tool_use.py
+change_type: style
+user_prompt: |
+  Never mind that for now I can't track down exactly what's going on and it's not a big deal.
+  
+  What I do want us to do now is create a hook for the edit tool for Swift files. When you write a Swift lint or Swift format or Swift lint custom disable directive, we should send a message to CC that says "Make sure that you've been told by the user directly to do this, the user approved this,  or that you are including justification for it in a comment." Could do match something like `swift.*:disable[ :]`
+old: |
+  from shared.hook_utils import (
+      emit_error,
+      emit_info,
+      format_hook_error,
+      get_bash_command,
+      get_hook_data,
+      get_tool_input,
+      get_tool_name,
+  )
+new: |
+  from shared.hook_utils import (
+      emit_error,
+      emit_info,
+      emit_warning,
+      format_hook_error,
+      get_bash_command,
+      get_hook_data,
+      get_tool_input,
+      get_tool_name,
+  )
+
+---
+# Edit 2025-11-27T10:40:54.517558
+time: 2025-11-27T10:40:54.517567
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/pre_tool_use.py
+change_type: style
+user_prompt: |
+  Never mind that for now I can't track down exactly what's going on and it's not a big deal.
+  
+  What I do want us to do now is create a hook for the edit tool for Swift files. When you write a Swift lint or Swift format or Swift lint custom disable directive, we should send a message to CC that says "Make sure that you've been told by the user directly to do this, the user approved this,  or that you are including justification for it in a comment." Could do match something like `swift.*:disable[ :]`
+old: |
+          # Log file edits (silent, non-blocking)
+          log_file_edit(hook_data)
+  
+          # Only validate Bash commands
+          if tool_name == "Bash":
+new: |
+          # Log file edits (silent, non-blocking)
+          log_file_edit(hook_data)
+  
+          # Check for Swift disable directives (warning only, non-blocking)
+          check_swift_disable_directive(hook_data)
+  
+          # Only validate Bash commands
+          if tool_name == "Bash":
+
+---
+# Edit 2025-11-27T10:42:31.811974
+time: 2025-11-27T10:42:31.811985
+file: /Users/bryancostanza/Developer/synodic-hooks/CLAUDE.md
+change_type: docs
+user_prompt: |
+  Never mind that for now I can't track down exactly what's going on and it's not a big deal.
+  
+  What I do want us to do now is create a hook for the edit tool for Swift files. When you write a Swift lint or Swift format or Swift lint custom disable directive, we should send a message to CC that says "Make sure that you've been told by the user directly to do this, the user approved this,  or that you are including justification for it in a comment." Could do match something like `swift.*:disable[ :]`
+old: |
+  ## Hook Types Available
+  
+  1. **PreToolUse** - Validate/block operations before execution
+  2. **PostToolUse** - Format/lint files after edits
+  3. **UserPromptSubmit** - Process prompts before Claude sees them
+  4. **Notification** - Handle Claude notifications (sound, logging)
+  5. **Stop** - Session completion (sound, cleanup)
+  6. **SubagentStop** - Subagent task completion
+  7. **PreCompact** - Before context compaction (archive, save)
+  8. **SessionStart** - Session initialization (see below for details)
+  9. **SessionEnd** - Session finalization (save state, reports)
+  
+  ### SessionStart Hook Responsibilities
+new: |
+  ## Hook Types Available
+  
+  1. **PreToolUse** - Validate/block operations before execution
+  2. **PostToolUse** - Format/lint files after edits
+  3. **UserPromptSubmit** - Process prompts before Claude sees them
+  4. **Notification** - Handle Claude notifications (sound, logging)
+  5. **Stop** - Session completion (sound, cleanup)
+  6. **SubagentStop** - Subagent task completion
+  7. **PreCompact** - Before context compaction (archive, save)
+  8. **SessionStart** - Session initialization (see below for details)
+  9. **SessionEnd** - Session finalization (save state, reports)
+  
+  ### PreToolUse Hook Responsibilities
+  
+  The PreToolUse hook runs before Claude executes any tool:
+  
+  1. **Log File Edits** - Records all text file edits to per-repo session files for pattern analysis
+  2. **Git Branch Protection** - Blocks commits/merges to non-claude/* branches (except initial commit)
+  3. **Push Protection** - Blocks direct pushes to protected branches (main, master, production)
+  4. **Branch Creation Warnings** - Warns when creating claude/* branches from other claude/* branches
+  5. **Swift Tool Enforcement** - Blocks bare `swiftlint`/`swiftformat` commands (must use `-smart` versions)
+  6. **Swift Disable Directive Warning** - Warns when adding `swiftlint:disable` or `swiftformat:disable` directives
+  
+  **Swift Disable Directive Warning**:
+  - Triggers on Edit operations to `.swift` files
+  - Detects pattern: `swift*:disable` (matches swiftlint:disable, swiftformat:disable, etc.)
+  - Only warns when ADDING a new directive (not when editing code with existing directives)
+  - Non-blocking warning reminds to:
+    1. Have explicit user approval, OR
+    2. Include justification comment explaining WHY the directive is needed
+  
+  ```
+  ⚠️  ============================================================
+  ⚠️  Adding Swift lint/format disable directive
+  ⚠️  File: /path/to/Example.swift
+  ⚠️  Directive: swiftlint:disable line_length...
+  ⚠️
+  ⚠️  Before proceeding, ensure ONE of:
+  ⚠️    1. User explicitly approved this disable directive
+  ⚠️    2. A justification comment explains WHY it's needed
+  ⚠️
+  ⚠️  Example: // swiftlint:disable:next line_length - URL too long
+  ⚠️  ============================================================
+  ```
+  
+  ### SessionStart Hook Responsibilities
+
+---
+# Edit 2025-11-27T10:42:56.660153
+time: 2025-11-27T10:42:56.660164
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py
+change_type: style
+user_prompt: |
+  Never mind that for now I can't track down exactly what's going on and it's not a big deal.
+  
+  What I do want us to do now is create a hook for the edit tool for Swift files. When you write a Swift lint or Swift format or Swift lint custom disable directive, we should send a message to CC that says "Make sure that you've been told by the user directly to do this, the user approved this,  or that you are including justification for it in a comment." Could do match something like `swift.*:disable[ :]`
+old: |
+  #!/usr/bin/env python3
+  """
+  PostToolUse Hook for Claude Code
+  Routes file edits to appropriate formatters based on file type
+  """
+  
+  import os
+  import sys
+  from pathlib import Path
+new: |
+  #!/usr/bin/env python3
+  """
+  PostToolUse Hook for Claude Code
+  Routes file edits to appropriate formatters based on file type
+  """
+  
+  import os
+  import re
+  import sys
+  from pathlib import Path
+
+---
+# Edit 2025-11-27T10:43:04.413563
+time: 2025-11-27T10:43:04.413575
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py
+change_type: style
+user_prompt: |
+  Never mind that for now I can't track down exactly what's going on and it's not a big deal.
+  
+  What I do want us to do now is create a hook for the edit tool for Swift files. When you write a Swift lint or Swift format or Swift lint custom disable directive, we should send a message to CC that says "Make sure that you've been told by the user directly to do this, the user approved this,  or that you are including justification for it in a comment." Could do match something like `swift.*:disable[ :]`
+old: |
+  from hook_utils import (
+      get_hook_data,
+      get_tool_name,
+      get_file_paths,
+      get_project_dir,
+      resolve_file_path,
+      should_process_tool,
+      format_hook_error,
+      EDIT_TOOLS,
+  )
+new: |
+  from hook_utils import (
+      emit_warning,
+      format_hook_error,
+      get_file_paths,
+      get_hook_data,
+      get_project_dir,
+      get_tool_input,
+      get_tool_name,
+      resolve_file_path,
+      should_process_tool,
+      EDIT_TOOLS,
+  )
+
+---
+# Edit 2025-11-27T10:43:26.939602
+time: 2025-11-27T10:43:26.939614
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py
+change_type: style
+user_prompt: |
+  Never mind that for now I can't track down exactly what's going on and it's not a big deal.
+  
+  What I do want us to do now is create a hook for the edit tool for Swift files. When you write a Swift lint or Swift format or Swift lint custom disable directive, we should send a message to CC that says "Make sure that you've been told by the user directly to do this, the user approved this,  or that you are including justification for it in a comment." Could do match something like `swift.*:disable[ :]`
+old: |
+  # Import formatter registry
+  from formatters import get_formatter
+  
+  
+  def get_repo_root(file_path: Path) -> Path | None:
+new: |
+  # Import formatter registry
+  from formatters import get_formatter
+  
+  # Pattern to match Swift disable directives
+  # Matches: swiftlint:disable, swiftformat:disable, swiftlint:disable:next, etc.
+  SWIFT_DISABLE_PATTERN = re.compile(r"swift\w*:disable[ :]", re.IGNORECASE)
+  
+  
+  def check_swift_disable_directive(hook_data: dict) -> None:
+      """
+      Check if an Edit added a SwiftLint/SwiftFormat disable directive
+  
+      Emits a warning to remind Claude to:
+      - Have explicit user approval, OR
+      - Include justification in a comment
+  
+      This is a warning only - does not block the edit.
+  
+      Args:
+          hook_data: Hook event data
+      """
+      tool_name = get_tool_name(hook_data)
+      if tool_name != "Edit":
+          return
+  
+      tool_input = get_tool_input(hook_data)
+      file_path = tool_input.get("file_path", "")
+      new_string = tool_input.get("new_string", "")
+      old_string = tool_input.get("old_string", "")
+  
+      # Only check Swift files
+      if not file_path.lower().endswith(".swift"):
+          return
+  
+      # Check if adding a new disable directive (not already present in old_string)
+      new_has_disable = SWIFT_DISABLE_PATTERN.search(new_string)
+      old_has_disable = SWIFT_DISABLE_PATTERN.search(old_string)
+  
+      # Only warn if this edit is ADDING a disable directive
+      if new_has_disable and not old_has_disable:
+          # Find the actual directive for context
+          match = SWIFT_DISABLE_PATTERN.search(new_string)
+          directive_context = (
+              new_string[match.start() : match.start() + 50] if match else ""
+          )
+  
+          emit_warning("=" * 60)
+          emit_warning("Adding Swift lint/format disable directive")
+          emit_warning(f"File: {file_path}")
+          emit_warning(f"Directive: {directive_context}...")
+          emit_warning("")
+          emit_warning("Before proceeding, ensure ONE of:")
+          emit_warning("  1. User explicitly approved this disable directive")
+          emit_warning("  2. A justification comment explains WHY it's needed")
+          emit_warning("")
+          emit_warning("Example: // swiftlint:disable:next line_length - URL too long")
+          emit_warning("=" * 60)
+  
+  
+  def get_repo_root(file_path: Path) -> Path | None:
+
+---
+# Edit 2025-11-27T10:43:38.289889
+time: 2025-11-27T10:43:38.289899
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py
+change_type: style
+user_prompt: |
+  Never mind that for now I can't track down exactly what's going on and it's not a big deal.
+  
+  What I do want us to do now is create a hook for the edit tool for Swift files. When you write a Swift lint or Swift format or Swift lint custom disable directive, we should send a message to CC that says "Make sure that you've been told by the user directly to do this, the user approved this,  or that you are including justification for it in a comment." Could do match something like `swift.*:disable[ :]`
+old: |
+  import os
+  import sys
+  from pathlib import Path
+new: |
+  import os
+  import re
+  import sys
+  from pathlib import Path
+
+---
+# Edit 2025-11-27T10:43:45.158929
+time: 2025-11-27T10:43:45.158939
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py
+change_type: style
+user_prompt: |
+  Never mind that for now I can't track down exactly what's going on and it's not a big deal.
+  
+  What I do want us to do now is create a hook for the edit tool for Swift files. When you write a Swift lint or Swift format or Swift lint custom disable directive, we should send a message to CC that says "Make sure that you've been told by the user directly to do this, the user approved this,  or that you are including justification for it in a comment." Could do match something like `swift.*:disable[ :]`
+old: |
+  from hook_utils import (
+      format_hook_error,
+      get_file_paths,
+      get_hook_data,
+      get_project_dir,
+      get_tool_name,
+      resolve_file_path,
+      should_process_tool,
+      EDIT_TOOLS,
+  )
+new: |
+  from hook_utils import (
+      emit_warning,
+      format_hook_error,
+      get_file_paths,
+      get_hook_data,
+      get_project_dir,
+      get_tool_input,
+      get_tool_name,
+      resolve_file_path,
+      should_process_tool,
+      EDIT_TOOLS,
+  )
+
+---
+# Edit 2025-11-27T10:43:55.974308
+time: 2025-11-27T10:43:55.974323
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py
+change_type: style
+user_prompt: |
+  Never mind that for now I can't track down exactly what's going on and it's not a big deal.
+  
+  What I do want us to do now is create a hook for the edit tool for Swift files. When you write a Swift lint or Swift format or Swift lint custom disable directive, we should send a message to CC that says "Make sure that you've been told by the user directly to do this, the user approved this,  or that you are including justification for it in a comment." Could do match something like `swift.*:disable[ :]`
+old: |
+  def main():
+      """Main entry point for PostToolUse hook"""
+      try:
+          # Read hook data
+          hook_data = get_hook_data()
+          tool_name = get_tool_name(hook_data)
+  
+          # Don't process Bash commands for formatting
+          if tool_name == "Bash":
+              sys.exit(0)
+new: |
+  def main():
+      """Main entry point for PostToolUse hook"""
+      try:
+          # Read hook data
+          hook_data = get_hook_data()
+          tool_name = get_tool_name(hook_data)
+  
+          # Check for Swift disable directives (warning only, non-blocking)
+          check_swift_disable_directive(hook_data)
+  
+          # Don't process Bash commands for formatting
+          if tool_name == "Bash":
+              sys.exit(0)
+
+---
+# Edit 2025-11-27T10:44:10.036118
+time: 2025-11-27T10:44:10.036141
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/pre_tool_use.py
+change_type: style
+user_prompt: |
+  Never mind that for now I can't track down exactly what's going on and it's not a big deal.
+  
+  What I do want us to do now is create a hook for the edit tool for Swift files. When you write a Swift lint or Swift format or Swift lint custom disable directive, we should send a message to CC that says "Make sure that you've been told by the user directly to do this, the user approved this,  or that you are including justification for it in a comment." Could do match something like `swift.*:disable[ :]`
+old: |
+      return True
+  
+  
+  # Pattern to match Swift disable directives
+  # Matches: swiftlint:disable, swiftformat:disable, swiftlint:disable:next, etc.
+  SWIFT_DISABLE_PATTERN = re.compile(r"swift\w*:disable[ :]", re.IGNORECASE)
+  
+  
+  def check_swift_disable_directive(hook_data: dict) -> None:
+      """
+      Check if an Edit adds a SwiftLint/SwiftFormat disable directive
+  
+      Emits a warning to remind Claude to:
+      - Have explicit user approval, OR
+      - Include justification in a comment
+  
+      This is a warning only - does not block the edit.
+  
+      Args:
+          hook_data: Hook event data
+      """
+      tool_name = get_tool_name(hook_data)
+      if tool_name != "Edit":
+          return
+  
+      tool_input = get_tool_input(hook_data)
+      file_path = tool_input.get("file_path", "")
+      new_string = tool_input.get("new_string", "")
+      old_string = tool_input.get("old_string", "")
+  
+      # Only check Swift files
+      if not file_path.lower().endswith(".swift"):
+          return
+  
+      # Check if adding a new disable directive (not already present in old_string)
+      new_has_disable = SWIFT_DISABLE_PATTERN.search(new_string)
+      old_has_disable = SWIFT_DISABLE_PATTERN.search(old_string)
+  
+      # Only warn if this edit is ADDING a disable directive
+      if new_has_disable and not old_has_disable:
+          # Find the actual directive for context
+          match = SWIFT_DISABLE_PATTERN.search(new_string)
+          directive_context = (
+              new_string[match.start() : match.start() + 50] if match else ""
+          )
+  
+          emit_warning("=" * 60)
+          emit_warning("Adding Swift lint/format disable directive")
+          emit_warning(f"File: {file_path}")
+          emit_warning(f"Directive: {directive_context}...")
+          emit_warning("")
+          emit_warning("Before proceeding, ensure ONE of:")
+          emit_warning("  1. User explicitly approved this disable directive")
+          emit_warning("  2. A justification comment explains WHY it's needed")
+          emit_warning("")
+          emit_warning("Example: // swiftlint:disable:next line_length - URL too long")
+          emit_warning("=" * 60)
+  
+  
+  def find_git_root(cwd: str) -> Path | None:
+new: |
+      return True
+  
+  
+  def find_git_root(cwd: str) -> Path | None:
+
+---
+# Edit 2025-11-27T10:44:27.537002
+time: 2025-11-27T10:44:27.537015
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/pre_tool_use.py
+change_type: style
+user_prompt: |
+  Never mind that for now I can't track down exactly what's going on and it's not a big deal.
+  
+  What I do want us to do now is create a hook for the edit tool for Swift files. When you write a Swift lint or Swift format or Swift lint custom disable directive, we should send a message to CC that says "Make sure that you've been told by the user directly to do this, the user approved this,  or that you are including justification for it in a comment." Could do match something like `swift.*:disable[ :]`
+old: |
+          # Log file edits (silent, non-blocking)
+          log_file_edit(hook_data)
+  
+          # Check for Swift disable directives (warning only, non-blocking)
+          check_swift_disable_directive(hook_data)
+  
+          # Only validate Bash commands
+new: |
+          # Log file edits (silent, non-blocking)
+          log_file_edit(hook_data)
+  
+          # Only validate Bash commands
+
+---
+# Edit 2025-11-27T10:44:38.867982
+time: 2025-11-27T10:44:38.867993
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/pre_tool_use.py
+change_type: style
+user_prompt: |
+  Never mind that for now I can't track down exactly what's going on and it's not a big deal.
+  
+  What I do want us to do now is create a hook for the edit tool for Swift files. When you write a Swift lint or Swift format or Swift lint custom disable directive, we should send a message to CC that says "Make sure that you've been told by the user directly to do this, the user approved this,  or that you are including justification for it in a comment." Could do match something like `swift.*:disable[ :]`
+old: |
+  """
+  PreToolUse Hook for Claude Code
+  
+  Runs before Claude executes any tool.
+  
+  Responsibilities:
+  1. Log Swift file edits for pattern analysis
+  2. Detect git commit, merge, and push operations
+  3. Enforce branch protection (only allow commits/merges to claude/* branches)
+  4. Prevent direct pushes to protected branches (main, master, production)
+  5. Warn when creating claude/* branches from other claude/* branches
+  6. Handle chained commands (e.g., cmd1 && cmd2 && cmd3)
+  7. Warn when adding SwiftLint/SwiftFormat disable directives without justification
+  
+  Self-healing: Blocks dangerous operations but provides clear guidance
+  """
+new: |
+  """
+  PreToolUse Hook for Claude Code
+  
+  Runs before Claude executes any tool.
+  
+  Responsibilities:
+  1. Log Swift file edits for pattern analysis
+  2. Detect git commit, merge, and push operations
+  3. Enforce branch protection (only allow commits/merges to claude/* branches)
+  4. Prevent direct pushes to protected branches (main, master, production)
+  5. Warn when creating claude/* branches from other claude/* branches
+  6. Handle chained commands (e.g., cmd1 && cmd2 && cmd3)
+  
+  Self-healing: Blocks dangerous operations but provides clear guidance
+  """
+
+---
+# Edit 2025-11-27T10:44:56.466694
+time: 2025-11-27T10:44:56.466704
+file: /Users/bryancostanza/Developer/synodic-hooks/CLAUDE.md
+change_type: docs
+user_prompt: |
+  Never mind that for now I can't track down exactly what's going on and it's not a big deal.
+  
+  What I do want us to do now is create a hook for the edit tool for Swift files. When you write a Swift lint or Swift format or Swift lint custom disable directive, we should send a message to CC that says "Make sure that you've been told by the user directly to do this, the user approved this,  or that you are including justification for it in a comment." Could do match something like `swift.*:disable[ :]`
+old: |
+  ### PreToolUse Hook Responsibilities
+  
+  The PreToolUse hook runs before Claude executes any tool:
+  
+  1. **Log File Edits** - Records all text file edits to per-repo session files for pattern analysis
+  2. **Git Branch Protection** - Blocks commits/merges to non-claude/* branches (except initial commit)
+  3. **Push Protection** - Blocks direct pushes to protected branches (main, master, production)
+  4. **Branch Creation Warnings** - Warns when creating claude/* branches from other claude/* branches
+  5. **Swift Tool Enforcement** - Blocks bare `swiftlint`/`swiftformat` commands (must use `-smart` versions)
+  6. **Swift Disable Directive Warning** - Warns when adding `swiftlint:disable` or `swiftformat:disable` directives
+  
+  **Swift Disable Directive Warning**:
+  - Triggers on Edit operations to `.swift` files
+  - Detects pattern: `swift*:disable` (matches swiftlint:disable, swiftformat:disable, etc.)
+  - Only warns when ADDING a new directive (not when editing code with existing directives)
+  - Non-blocking warning reminds to:
+    1. Have explicit user approval, OR
+    2. Include justification comment explaining WHY the directive is needed
+  
+  ```
+  ⚠️  ============================================================
+  ⚠️  Adding Swift lint/format disable directive
+  ⚠️  File: /path/to/Example.swift
+  ⚠️  Directive: swiftlint:disable line_length...
+  ⚠️
+  ⚠️  Before proceeding, ensure ONE of:
+  ⚠️    1. User explicitly approved this disable directive
+  ⚠️    2. A justification comment explains WHY it's needed
+  ⚠️
+  ⚠️  Example: // swiftlint:disable:next line_length - URL too long
+  ⚠️  ============================================================
+  ```
+  
+  ### SessionStart Hook Responsibilities
+new: |
+  ### PreToolUse Hook Responsibilities
+  
+  The PreToolUse hook runs before Claude executes any tool:
+  
+  1. **Log File Edits** - Records all text file edits to per-repo session files for pattern analysis
+  2. **Git Branch Protection** - Blocks commits/merges to non-claude/* branches (except initial commit)
+  3. **Push Protection** - Blocks direct pushes to protected branches (main, master, production)
+  4. **Branch Creation Warnings** - Warns when creating claude/* branches from other claude/* branches
+  5. **Swift Tool Enforcement** - Blocks bare `swiftlint`/`swiftformat` commands (must use `-smart` versions)
+  
+  ### PostToolUse Hook Responsibilities
+  
+  The PostToolUse hook runs after Claude executes any tool:
+  
+  1. **File Formatting** - Runs language-specific formatters (swiftformat-smart, ruff, etc.)
+  2. **Quality Checks** - Runs linters after file edits (swiftlint-smart, etc.)
+  3. **Edit Tracking** - Tracks edited files for status line display
+  4. **Batch Edit Hints** - Suggests batch editing after multiple Swift file edits
+  5. **Swift Disable Directive Warning** - Warns when adding `swiftlint:disable` or `swiftformat:disable` directives
+  
+  **Swift Disable Directive Warning**:
+  - Triggers on Edit operations to `.swift` files
+  - Detects pattern: `swift*:disable` (matches swiftlint:disable, swiftformat:disable, etc.)
+  - Only warns when ADDING a new directive (not when editing code with existing directives)
+  - Non-blocking warning reminds to:
+    1. Have explicit user approval, OR
+    2. Include justification comment explaining WHY the directive is needed
+  
+  ```
+  ⚠️  ============================================================
+  ⚠️  Adding Swift lint/format disable directive
+  ⚠️  File: /path/to/Example.swift
+  ⚠️  Directive: swiftlint:disable line_length...
+  ⚠️
+  ⚠️  Before proceeding, ensure ONE of:
+  ⚠️    1. User explicitly approved this disable directive
+  ⚠️    2. A justification comment explains WHY it's needed
+  ⚠️
+  ⚠️  Example: // swiftlint:disable:next line_length - URL too long
+  ⚠️  ============================================================
+  ```
+  
+  ### SessionStart Hook Responsibilities
+
+---
+# Edit 2025-11-27T10:49:31.851695
+time: 2025-11-27T10:49:31.851725
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/post_tool_use.py
+change_type: feature
+user_prompt: |
+  I only meant to ask if adding ` - explanation` after the directive break the directive? I like your (2) though too
+old: |
+          emit_warning("Example: // swiftlint:disable:next line_length - URL too long")
+new: |
+          emit_warning("Example: // swiftlint:disable:next rule_name - [explain why]")
+
+---
+# Edit 2025-11-27T10:49:37.220842
+time: 2025-11-27T10:49:37.220855
+file: /Users/bryancostanza/Developer/synodic-hooks/CLAUDE.md
+change_type: docs
+user_prompt: |
+  I only meant to ask if adding ` - explanation` after the directive break the directive? I like your (2) though too
+old: |
+  ⚠️  Example: // swiftlint:disable:next line_length - URL too long
+new: |
+  ⚠️  Example: // swiftlint:disable:next rule_name - [explain why]
+

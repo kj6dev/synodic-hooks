@@ -5,6 +5,7 @@ Routes file edits to appropriate formatters based on file type
 """
 
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -13,18 +14,144 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # claude/ for hook_uti
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # root for formatters
 
 from hook_utils import (
-    get_hook_data,
-    get_tool_name,
+    emit_warning,
+    format_hook_error,
     get_file_paths,
+    get_hook_data,
     get_project_dir,
+    get_tool_input,
+    get_tool_name,
     resolve_file_path,
     should_process_tool,
-    format_hook_error,
     EDIT_TOOLS,
 )
 
 # Import formatter registry
 from formatters import get_formatter
+
+# Pattern to match Swift disable directives
+# Matches: swiftlint:disable, swiftformat:disable, swiftlint:disable:next, etc.
+SWIFT_DISABLE_PATTERN = re.compile(r"swift\w*:disable[ :]", re.IGNORECASE)
+
+
+def check_swift_disable_directive(hook_data: dict) -> None:
+    """
+    Check if an Edit added a SwiftLint/SwiftFormat disable directive
+
+    Emits a warning to remind Claude to:
+    - Have explicit user approval, OR
+    - Include justification in a comment
+
+    This is a warning only - does not block the edit.
+
+    Args:
+        hook_data: Hook event data
+    """
+    tool_name = get_tool_name(hook_data)
+    if tool_name != "Edit":
+        return
+
+    tool_input = get_tool_input(hook_data)
+    file_path = tool_input.get("file_path", "")
+    new_string = tool_input.get("new_string", "")
+    old_string = tool_input.get("old_string", "")
+
+    # Only check Swift files
+    if not file_path.lower().endswith(".swift"):
+        return
+
+    # Check if adding a new disable directive (not already present in old_string)
+    new_has_disable = SWIFT_DISABLE_PATTERN.search(new_string)
+    old_has_disable = SWIFT_DISABLE_PATTERN.search(old_string)
+
+    # Only warn if this edit is ADDING a disable directive
+    if new_has_disable and not old_has_disable:
+        # Find the actual directive for context
+        match = SWIFT_DISABLE_PATTERN.search(new_string)
+        directive_context = (
+            new_string[match.start() : match.start() + 50] if match else ""
+        )
+
+        emit_warning("=" * 60)
+        emit_warning("Adding Swift lint/format disable directive")
+        emit_warning(f"File: {file_path}")
+        emit_warning(f"Directive: {directive_context}...")
+        emit_warning("")
+        emit_warning("Before proceeding, ensure ONE of:")
+        emit_warning("  1. User explicitly approved this disable directive")
+        emit_warning("  2. A justification comment explains WHY it's needed")
+        emit_warning("")
+        emit_warning("Example: // swiftlint:disable:next rule_name - [explain why]")
+        emit_warning("=" * 60)
+
+
+def get_repo_root(file_path: Path) -> Path | None:
+    """Find git repository root for a file path"""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(file_path.parent), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return Path(result.stdout.strip())
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+    return None
+
+
+def get_repo_tracker_file(repo_root: Path) -> Path:
+    """Get tracker file path for a repository (using hash of repo path)"""
+    import hashlib
+
+    repo_hash = hashlib.md5(str(repo_root).encode()).hexdigest()[:12]
+    return Path.home() / ".claude" / f"recent-edits-{repo_hash}.txt"
+
+
+def track_edited_file(file_path: Path) -> None:
+    """
+    Track edited files for status line display (repo-scoped)
+
+    Maintains a rolling list of the last 10 edited files per repository.
+    Status line can read this to show the most recently edited files.
+    """
+    try:
+        # Find repo root for this file
+        repo_root = get_repo_root(file_path)
+        if repo_root is None:
+            return  # Not in a git repo, skip tracking
+
+        tracker_file = get_repo_tracker_file(repo_root)
+
+        # Read existing files (keep last 10)
+        existing_files = []
+        if tracker_file.exists():
+            existing_files = [
+                line.strip()
+                for line in tracker_file.read_text().splitlines()
+                if line.strip()
+            ]
+
+        # Remove this file if it already exists (to move it to top)
+        file_str = str(file_path.resolve())
+        existing_files = [f for f in existing_files if f != file_str]
+
+        # Add new file to top
+        existing_files.insert(0, file_str)
+
+        # Keep only last 10 files
+        existing_files = existing_files[:10]
+
+        # Write back
+        tracker_file.parent.mkdir(parents=True, exist_ok=True)
+        tracker_file.write_text("\n".join(existing_files) + "\n")
+
+    except (OSError, Exception):
+        # Silently fail - this is just for status line display
+        pass
 
 
 def track_swift_edits_and_suggest_batching(file_path: Path) -> None:
@@ -102,6 +229,9 @@ def main():
         hook_data = get_hook_data()
         tool_name = get_tool_name(hook_data)
 
+        # Check for Swift disable directives (warning only, non-blocking)
+        check_swift_disable_directive(hook_data)
+
         # Don't process Bash commands for formatting
         if tool_name == "Bash":
             sys.exit(0)
@@ -130,6 +260,9 @@ def main():
                 continue
 
             try:
+                # Track this edit for status line display
+                track_edited_file(file_path)
+
                 # Track Swift edits and suggest batching if appropriate
                 track_swift_edits_and_suggest_batching(file_path)
 

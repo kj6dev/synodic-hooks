@@ -1,0 +1,218 @@
+---
+# Session Metadata
+session_id: claude-20251128-140256
+started: 2025-11-28T14:02:56.404823
+repo: /Users/bryancostanza/Developer/synodic-hooks
+branch: develop
+edit_count: 0
+---
+
+---
+# Edit 2025-11-28T14:02:56.405358
+time: 2025-11-28T14:02:56.405362
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/pre_tool_use.py
+change_type: bugfix
+user_prompt: |
+  new issue: hook to discourage `cd`, prefer to run from where claude was started
+old: |
+      return False, ""
+  
+  
+  def split_chained_commands(command: str) -> list[str]:
+new: |
+      return False, ""
+  
+  
+  def is_cd_command(command: str) -> bool:
+      """
+      Detect if a bash command changes directory
+  
+      Handles:
+      - cd /path
+      - cd ..
+      - cd (home directory)
+      - pushd/popd
+  
+      Does NOT flag:
+      - git -C /path (uses -C flag, doesn't change shell cwd)
+      - (cd /path && cmd) - subshell, doesn't affect parent
+  
+      Args:
+          command: Bash command to check
+  
+      Returns:
+          True if command changes directory
+      """
+      cmd = command.strip()
+  
+      # Check for subshell pattern - these don't affect parent shell
+      if cmd.startswith("(") and cmd.endswith(")"):
+          return False
+  
+      # Check for cd or pushd at start of command
+      if cmd.startswith("cd ") or cmd == "cd":
+          return True
+      if cmd.startswith("pushd ") or cmd == "pushd":
+          return True
+  
+      return False
+  
+  
+  def check_cd_command(command: str) -> None:
+      """
+      Emit warning if command uses cd
+  
+      Non-blocking warning to prefer absolute paths over changing directories.
+  
+      Args:
+          command: Bash command to check
+      """
+      if not is_cd_command(command):
+          return
+  
+      emit_warning("=" * 60)
+      emit_warning("Using 'cd' to change directory")
+      emit_warning("")
+      emit_warning("Prefer running commands from the project root using absolute paths.")
+      emit_warning("This keeps the working directory predictable and avoids issues.")
+      emit_warning("")
+      emit_warning("Instead of:")
+      emit_warning("  cd src/components && npm test")
+      emit_warning("")
+      emit_warning("Prefer:")
+      emit_warning("  npm test --prefix src/components")
+      emit_warning("  # or")
+      emit_warning("  (cd src/components && npm test)  # subshell, doesn't affect cwd")
+      emit_warning("=" * 60)
+  
+  
+  def split_chained_commands(command: str) -> list[str]:
+
+---
+# Edit 2025-11-28T14:03:07.558041
+time: 2025-11-28T14:03:07.558058
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/pre_tool_use.py
+change_type: bugfix
+user_prompt: |
+  new issue: hook to discourage `cd`, prefer to run from where claude was started
+old: |
+  from shared.hook_utils import (
+      emit_error,
+      emit_info,
+      format_hook_error,
+      get_bash_command,
+      get_hook_data,
+      get_tool_input,
+      get_tool_name,
+  )
+new: |
+  from shared.hook_utils import (
+      emit_error,
+      emit_info,
+      emit_warning,
+      format_hook_error,
+      get_bash_command,
+      get_hook_data,
+      get_tool_input,
+      get_tool_name,
+  )
+
+---
+# Edit 2025-11-28T14:03:20.367626
+time: 2025-11-28T14:03:20.367641
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/pre_tool_use.py
+change_type: bugfix
+user_prompt: |
+  new issue: hook to discourage `cd`, prefer to run from where claude was started
+old: |
+      cwd = hook_data.get("cwd", ".")
+  
+      # Split chained commands and validate each one
+      subcommands = split_chained_commands(command)
+  
+      for subcmd in subcommands:
+          # Check for bare Swift quality tools
+new: |
+      cwd = hook_data.get("cwd", ".")
+  
+      # Check for cd command (warning only, non-blocking)
+      check_cd_command(command)
+  
+      # Split chained commands and validate each one
+      subcommands = split_chained_commands(command)
+  
+      for subcmd in subcommands:
+          # Check for bare Swift quality tools
+
+---
+# Edit 2025-11-28T14:03:31.183301
+time: 2025-11-28T14:03:31.183320
+file: /Users/bryancostanza/Developer/synodic-hooks/claude/pre_tool_use.py
+change_type: bugfix
+user_prompt: |
+  new issue: hook to discourage `cd`, prefer to run from where claude was started
+old: |
+  """
+  PreToolUse Hook for Claude Code
+  
+  Runs before Claude executes any tool.
+  
+  Responsibilities:
+  1. Log Swift file edits for pattern analysis
+  2. Detect git commit, merge, and push operations
+  3. Enforce branch protection (only allow commits/merges to claude/* branches)
+  4. Prevent direct pushes to protected branches (main, master, production)
+  5. Warn when creating claude/* branches from other claude/* branches
+  6. Handle chained commands (e.g., cmd1 && cmd2 && cmd3)
+  
+  Self-healing: Blocks dangerous operations but provides clear guidance
+  """
+new: |
+  """
+  PreToolUse Hook for Claude Code
+  
+  Runs before Claude executes any tool.
+  
+  Responsibilities:
+  1. Log Swift file edits for pattern analysis
+  2. Detect git commit, merge, and push operations
+  3. Enforce branch protection (only allow commits/merges to claude/* branches)
+  4. Prevent direct pushes to protected branches (main, master, production)
+  5. Warn when creating claude/* branches from other claude/* branches
+  6. Handle chained commands (e.g., cmd1 && cmd2 && cmd3)
+  7. Warn when using cd to change directory (prefer absolute paths)
+  
+  Self-healing: Blocks dangerous operations but provides clear guidance
+  """
+
+---
+# Edit 2025-11-28T14:04:03.298959
+time: 2025-11-28T14:04:03.298971
+file: /Users/bryancostanza/Developer/synodic-hooks/CLAUDE.md
+change_type: docs
+user_prompt: |
+  new issue: hook to discourage `cd`, prefer to run from where claude was started
+old: |
+  1. **Log File Edits** - Records all text file edits to per-repo session files for pattern analysis
+  2. **Git Branch Protection** - Blocks commits/merges to non-claude/* branches (except initial commit)
+  3. **Push Protection** - Blocks direct pushes to protected branches (main, master, production)
+  4. **Branch Creation Warnings** - Warns when creating claude/* branches from other claude/* branches
+  5. **Swift Tool Enforcement** - Blocks bare `swiftlint`/`swiftformat` commands (must use `-smart` versions)
+  
+  ### PostToolUse Hook Responsibilities
+new: |
+  1. **Log File Edits** - Records all text file edits to per-repo session files for pattern analysis
+  2. **Git Branch Protection** - Blocks commits/merges to non-claude/* branches (except initial commit)
+  3. **Push Protection** - Blocks direct pushes to protected branches (main, master, production)
+  4. **Branch Creation Warnings** - Warns when creating claude/* branches from other claude/* branches
+  5. **Swift Tool Enforcement** - Blocks bare `swiftlint`/`swiftformat` commands (must use `-smart` versions)
+  6. **Directory Change Warning** - Warns when using `cd` to change directory (prefer absolute paths)
+  
+  **Directory Change Warning**:
+  - Warns when using `cd` or `pushd` commands
+  - Does NOT warn for subshells: `(cd /path && cmd)` - these don't affect parent shell
+  - Does NOT warn for `git -C /path` - uses flag, doesn't change cwd
+  - Non-blocking reminder to prefer absolute paths from project root
+  
+  ### PostToolUse Hook Responsibilities
+

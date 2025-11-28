@@ -214,6 +214,13 @@ The PreToolUse hook runs before Claude executes any tool:
 3. **Push Protection** - Blocks direct pushes to protected branches (main, master, production)
 4. **Branch Creation Warnings** - Warns when creating claude/* branches from other claude/* branches
 5. **Swift Tool Enforcement** - Blocks bare `swiftlint`/`swiftformat` commands (must use `-smart` versions)
+6. **Directory Change Warning** - Warns when using `cd` to change directory (prefer absolute paths)
+
+**Directory Change Warning**:
+- Warns when using `cd` or `pushd` commands
+- Does NOT warn for subshells: `(cd /path && cmd)` - these don't affect parent shell
+- Does NOT warn for `git -C /path` - uses flag, doesn't change cwd
+- Non-blocking reminder to prefer absolute paths from project root
 
 ### PostToolUse Hook Responsibilities
 

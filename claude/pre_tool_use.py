@@ -11,6 +11,7 @@ Responsibilities:
 4. Prevent direct pushes to protected branches (main, master, production)
 5. Warn when creating claude/* branches from other claude/* branches
 6. Handle chained commands (e.g., cmd1 && cmd2 && cmd3)
+7. Warn when using cd to change directory (prefer absolute paths)
 
 Self-healing: Blocks dangerous operations but provides clear guidance
 """
@@ -30,6 +31,7 @@ from shared.git import get_current_branch, is_claude_branch
 from shared.hook_utils import (
     emit_error,
     emit_info,
+    emit_warning,
     format_hook_error,
     get_bash_command,
     get_hook_data,
@@ -979,6 +981,69 @@ def is_bare_swift_tool_command(command: str) -> tuple[bool, str]:
     return False, ""
 
 
+def is_cd_command(command: str) -> bool:
+    """
+    Detect if a bash command changes directory
+
+    Handles:
+    - cd /path
+    - cd ..
+    - cd (home directory)
+    - pushd/popd
+
+    Does NOT flag:
+    - git -C /path (uses -C flag, doesn't change shell cwd)
+    - (cd /path && cmd) - subshell, doesn't affect parent
+
+    Args:
+        command: Bash command to check
+
+    Returns:
+        True if command changes directory
+    """
+    cmd = command.strip()
+
+    # Check for subshell pattern - these don't affect parent shell
+    if cmd.startswith("(") and cmd.endswith(")"):
+        return False
+
+    # Check for cd or pushd at start of command
+    if cmd.startswith("cd ") or cmd == "cd":
+        return True
+    if cmd.startswith("pushd ") or cmd == "pushd":
+        return True
+
+    return False
+
+
+def check_cd_command(command: str) -> None:
+    """
+    Emit warning if command uses cd
+
+    Non-blocking warning to prefer absolute paths over changing directories.
+
+    Args:
+        command: Bash command to check
+    """
+    if not is_cd_command(command):
+        return
+
+    emit_warning("=" * 60)
+    emit_warning("Using 'cd' to change directory")
+    emit_warning("")
+    emit_warning("Prefer running commands from the project root using absolute paths.")
+    emit_warning("This keeps the working directory predictable and avoids issues.")
+    emit_warning("")
+    emit_warning("Instead of:")
+    emit_warning("  cd src/components && npm test")
+    emit_warning("")
+    emit_warning("Prefer:")
+    emit_warning("  npm test --prefix src/components")
+    emit_warning("  # or")
+    emit_warning("  (cd src/components && npm test)  # subshell, doesn't affect cwd")
+    emit_warning("=" * 60)
+
+
 def split_chained_commands(command: str) -> list[str]:
     """
     Split a bash command into individual commands if chained with && or ;
@@ -1022,6 +1087,9 @@ def validate_bash_command(hook_data: dict) -> bool:
         return True  # Not a Bash command
 
     cwd = hook_data.get("cwd", ".")
+
+    # Check for cd command (warning only, non-blocking)
+    check_cd_command(command)
 
     # Split chained commands and validate each one
     subcommands = split_chained_commands(command)

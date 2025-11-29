@@ -912,7 +912,7 @@ def validate_git_push(command: str, cwd: str) -> tuple[bool, str]:
             return False, "Not in a git repository or detached HEAD state"
 
         # Block pushes to protected branches
-        protected_branches = ["main", "master", "production", "prod"]
+        protected_branches = ["main", "master", "develop", "production", "prod"]
 
         if target_branch in protected_branches:
             reason = (

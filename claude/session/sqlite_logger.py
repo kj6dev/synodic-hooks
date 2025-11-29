@@ -4,7 +4,7 @@ SQLite Session Logger
 Logs Claude Code edit operations to a centralized SQLite database.
 Database location: ~/Developer/claude-session-db/{repo-name}.db
 
-Schema uses started_at timestamp as unique session identifier (no session_id).
+Simple flat schema - just edits with timestamp, no session grouping.
 
 This module can be tested directly:
     python -m claude.session.sqlite_logger --test
@@ -14,7 +14,6 @@ Or imported and used:
 """
 
 import sqlite3
-import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -42,33 +41,19 @@ def create_schema(conn: sqlite3.Connection) -> None:
     """Create database schema if it doesn't exist"""
     cursor = conn.cursor()
 
-    # Sessions table - started_at is the unique identifier
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS sessions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        started_at TEXT UNIQUE NOT NULL,
-        repo TEXT NOT NULL,
-        branch TEXT
-    )
-    """)
-
-    # Edits table - references session by integer id
+    # Flat edits table - no session grouping needed
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS edits (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id INTEGER NOT NULL,
         timestamp TEXT NOT NULL,
+        repo TEXT NOT NULL,
+        branch TEXT,
         file_path TEXT NOT NULL,
         change_type TEXT,
         user_prompt TEXT,
         old_content TEXT,
-        new_content TEXT,
-        FOREIGN KEY (session_id) REFERENCES sessions(id)
+        new_content TEXT
     )
-    """)
-
-    cursor.execute("""
-    CREATE INDEX IF NOT EXISTS idx_edits_session ON edits(session_id)
     """)
 
     cursor.execute("""
@@ -77,6 +62,10 @@ def create_schema(conn: sqlite3.Connection) -> None:
 
     cursor.execute("""
     CREATE INDEX IF NOT EXISTS idx_edits_timestamp ON edits(timestamp)
+    """)
+
+    cursor.execute("""
+    CREATE INDEX IF NOT EXISTS idx_edits_repo ON edits(repo)
     """)
 
     conn.commit()
@@ -95,67 +84,8 @@ def get_repo_name(git_root: Path) -> str:
     return git_root.name
 
 
-def get_current_branch(git_root: Path) -> str:
-    """
-    Get current git branch
-
-    Args:
-        git_root: Path to git repository root
-
-    Returns:
-        Branch name or 'unknown'
-    """
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            capture_output=True,
-            text=True,
-            cwd=str(git_root),
-            timeout=5,
-        )
-        return result.stdout.strip() if result.returncode == 0 else "unknown"
-    except Exception:
-        return "unknown"
-
-
-def get_or_create_session(
-    conn: sqlite3.Connection, started_at: str, repo_path: str, branch: str
-) -> int:
-    """
-    Get existing session or create new one
-
-    Args:
-        conn: SQLite connection
-        started_at: Session start timestamp (unique identifier)
-        repo_path: Full path to repository
-        branch: Current git branch
-
-    Returns:
-        Session id (integer)
-    """
-    cursor = conn.cursor()
-
-    # Try to get existing session
-    cursor.execute("SELECT id FROM sessions WHERE started_at = ?", (started_at,))
-    row = cursor.fetchone()
-    if row:
-        return row[0]
-
-    # Create new session
-    cursor.execute(
-        """
-        INSERT INTO sessions (started_at, repo, branch)
-        VALUES (?, ?, ?)
-        """,
-        (started_at, repo_path, branch),
-    )
-    conn.commit()
-    return cursor.lastrowid
-
-
 def log_edit_to_sqlite(
     repo_name: str,
-    session_started_at: str,
     repo_path: str,
     branch: str,
     file_path: str,
@@ -169,7 +99,6 @@ def log_edit_to_sqlite(
 
     Args:
         repo_name: Repository name (for database file)
-        session_started_at: Session start timestamp (unique identifier)
         repo_path: Full path to repository
         branch: Current git branch
         file_path: Path to file being edited
@@ -186,20 +115,20 @@ def log_edit_to_sqlite(
         conn = sqlite3.connect(str(db_path))
 
         create_schema(conn)
-        session_id = get_or_create_session(conn, session_started_at, repo_path, branch)
 
         cursor = conn.cursor()
         cursor.execute(
             """
             INSERT INTO edits (
-                session_id, timestamp, file_path, change_type,
+                timestamp, repo, branch, file_path, change_type,
                 user_prompt, old_content, new_content
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                session_id,
                 datetime.now().isoformat(),
+                repo_path,
+                branch,
                 file_path,
                 change_type,
                 user_prompt,
@@ -224,50 +153,44 @@ def get_stats(repo_name: str) -> dict:
         repo_name: Repository name
 
     Returns:
-        Dict with session and edit counts
+        Dict with edit count
     """
     try:
         db_path = get_db_path(repo_name)
         if not db_path.exists():
-            return {"sessions": 0, "edits": 0, "exists": False}
+            return {"edits": 0, "exists": False}
 
         conn = sqlite3.connect(str(db_path))
         cursor = conn.cursor()
-
-        cursor.execute("SELECT COUNT(*) FROM sessions")
-        sessions = cursor.fetchone()[0]
 
         cursor.execute("SELECT COUNT(*) FROM edits")
         edits = cursor.fetchone()[0]
 
         conn.close()
-        return {"sessions": sessions, "edits": edits, "exists": True}
+        return {"edits": edits, "exists": True}
 
     except Exception as e:
-        return {"sessions": 0, "edits": 0, "exists": False, "error": str(e)}
+        return {"edits": 0, "exists": False, "error": str(e)}
 
 
 def run_test() -> None:
     """
     Test the SQLite logger with sample data
     """
-    print("Testing SQLite Session Logger (simplified schema)")
+    print("Testing SQLite Session Logger (flat schema)")
     print("=" * 60)
 
     # Test repo name
     test_repo = "sqlite-logger-test"
-    test_session_start = datetime.now().isoformat()
 
     print(f"Database directory: {SESSION_DB_DIR}")
     print(f"Test repo: {test_repo}")
-    print(f"Session started_at: {test_session_start}")
     print()
 
     # Log a test edit
     print("Logging test edit...")
     success = log_edit_to_sqlite(
         repo_name=test_repo,
-        session_started_at=test_session_start,
         repo_path="/tmp/test-repo",
         branch="main",
         file_path="/tmp/test-repo/src/main.py",
@@ -283,11 +206,10 @@ def run_test() -> None:
         print("  FAILED to log edit")
         return
 
-    # Log another edit (same session)
-    print("Logging second test edit (same session)...")
+    # Log another edit
+    print("Logging second test edit...")
     success = log_edit_to_sqlite(
         repo_name=test_repo,
-        session_started_at=test_session_start,
         repo_path="/tmp/test-repo",
         branch="main",
         file_path="/tmp/test-repo/src/utils.py",
@@ -306,7 +228,6 @@ def run_test() -> None:
     print()
     print("Database stats:")
     stats = get_stats(test_repo)
-    print(f"  Sessions: {stats['sessions']}")
     print(f"  Edits: {stats['edits']}")
 
     # Show database path
@@ -315,29 +236,16 @@ def run_test() -> None:
     print(f"Database file: {db_path}")
     print(f"File size: {db_path.stat().st_size} bytes")
 
-    # Query to show the schema
-    print()
-    print("Schema:")
-    conn = sqlite3.connect(str(db_path))
-    cursor = conn.cursor()
-    cursor.execute("SELECT sql FROM sqlite_master WHERE type='table'")
-    for row in cursor.fetchall():
-        if row[0]:
-            print(f"  {row[0][:80]}...")
-
     # Query to show the edits
     print()
     print("Edits in database:")
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.cursor()
     cursor.execute(
-        """
-        SELECT e.timestamp, e.file_path, e.change_type, s.started_at
-        FROM edits e
-        JOIN sessions s ON e.session_id = s.id
-        ORDER BY e.timestamp
-        """
+        "SELECT timestamp, file_path, branch, change_type FROM edits ORDER BY timestamp"
     )
     for row in cursor.fetchall():
-        print(f"  {row[0][:19]} | {row[1][-30:]} | {row[2]}")
+        print(f"  {row[0][:19]} | {row[2]} | {row[1][-30:]} | {row[3]}")
     conn.close()
 
     print()

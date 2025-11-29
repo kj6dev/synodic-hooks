@@ -413,23 +413,10 @@ def log_file_edit(hook_data: dict) -> None:
         # SQLite logging (parallel with YAML during transition)
         if SQLITE_LOGGING_AVAILABLE and git_root:
             try:
-                # Use mtime of current_session file as session start time
-                session_file = git_root / ".claude" / "current_session"
-                if session_file.exists():
-                    started_at = datetime.fromtimestamp(
-                        session_file.stat().st_mtime
-                    ).isoformat()
-                else:
-                    started_at = datetime.now().isoformat()
-
-                # Get branch for SQLite logging
-                branch = get_current_branch(str(git_root))
-
                 log_edit_to_sqlite(
                     repo_name=get_repo_name(git_root),
-                    session_started_at=started_at,
                     repo_path=str(git_root),
-                    branch=branch,
+                    branch=get_current_branch(str(git_root)),
                     file_path=file_path,
                     change_type=change_type,
                     user_prompt=user_prompt,

@@ -136,7 +136,21 @@ def log_edit_to_sqlite(
         return True
 
     except Exception as e:
-        print(f"SQLite logger error: {e}", file=sys.stderr)
+        # Loud failure - make sure Claude sees this
+        import traceback
+
+        print("🚨" * 20, file=sys.stderr)
+        print("🚨 SQLite SESSION LOGGING FAILED", file=sys.stderr)
+        print("🚨" * 20, file=sys.stderr)
+        print(f"🚨 Error: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"🚨 Database: {db_path}", file=sys.stderr)
+        print(f"🚨 File being logged: {file_path}", file=sys.stderr)
+        print("🚨", file=sys.stderr)
+        print("🚨 This needs to be fixed! Edit logging is broken.", file=sys.stderr)
+        print("🚨", file=sys.stderr)
+        print("🚨 Stack trace:", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        print("🚨" * 20, file=sys.stderr)
         return False
 
 

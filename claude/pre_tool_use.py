@@ -38,7 +38,7 @@ from shared.hook_utils import (
     get_tool_name,
 )
 
-# SQLite session logging (parallel with YAML during transition)
+# SQLite session logging
 try:
     # Direct import from file path (avoids needing __init__.py package structure)
     import importlib.util
@@ -50,7 +50,20 @@ try:
     log_edit_to_sqlite = _sqlite_module.log_edit_to_sqlite
 
     SQLITE_LOGGING_AVAILABLE = True
-except Exception:
+except Exception as e:
+    # Loud failure - SQLite logging is critical
+    import traceback
+
+    print("🚨" * 20, file=sys.stderr)
+    print("🚨 SQLITE LOGGER IMPORT FAILED", file=sys.stderr)
+    print("🚨" * 20, file=sys.stderr)
+    print(f"🚨 Error: {type(e).__name__}: {e}", file=sys.stderr)
+    print("🚨", file=sys.stderr)
+    print("🚨 Edit logging will NOT work this session!", file=sys.stderr)
+    print("🚨 Fix the sqlite_logger.py module.", file=sys.stderr)
+    print("🚨", file=sys.stderr)
+    traceback.print_exc(file=sys.stderr)
+    print("🚨" * 20, file=sys.stderr)
     SQLITE_LOGGING_AVAILABLE = False
 
 
@@ -287,7 +300,7 @@ def log_file_edit(hook_data: dict) -> None:
         )
 
         # Log to SQLite
-        log_edit_to_sqlite(
+        success = log_edit_to_sqlite(
             repo_path=str(git_root),
             branch=get_current_branch(str(git_root)),
             file_path=file_path,
@@ -296,9 +309,23 @@ def log_file_edit(hook_data: dict) -> None:
             old_content=old_string,
             new_content=new_string,
         )
-    except Exception:
-        # Silent failure - don't block workflow for logging errors
-        pass
+        if not success:
+            # log_edit_to_sqlite already printed loud error
+            pass
+    except Exception as e:
+        # Loud failure - logging errors need attention
+        import traceback
+
+        print("🚨" * 20, file=sys.stderr)
+        print("🚨 EDIT LOGGING FAILED (outer handler)", file=sys.stderr)
+        print("🚨" * 20, file=sys.stderr)
+        print(f"🚨 Error: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"🚨 File: {file_path}", file=sys.stderr)
+        print("🚨", file=sys.stderr)
+        print("🚨 This edit was NOT logged to SQLite!", file=sys.stderr)
+        print("🚨", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        print("🚨" * 20, file=sys.stderr)
 
 
 def is_git_commit_command(command: str) -> bool:

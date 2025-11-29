@@ -41,7 +41,7 @@ from shared.hook_utils import (
 
 # SQLite session logging (parallel with YAML during transition)
 try:
-    from claude.session.sqlite_logger import log_edit_to_sqlite, get_repo_name
+    from claude.session.sqlite_logger import log_edit_to_sqlite
 
     SQLITE_LOGGING_AVAILABLE = True
 except ImportError:
@@ -414,7 +414,6 @@ def log_file_edit(hook_data: dict) -> None:
         if SQLITE_LOGGING_AVAILABLE and git_root:
             try:
                 log_edit_to_sqlite(
-                    repo_name=get_repo_name(git_root),
                     repo_path=str(git_root),
                     branch=get_current_branch(str(git_root)),
                     file_path=file_path,

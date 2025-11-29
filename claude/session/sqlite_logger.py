@@ -19,22 +19,19 @@ from datetime import datetime
 from pathlib import Path
 
 
-# Database location
-SESSION_DB_DIR = Path.home() / "Developer" / "claude-session-db"
+# Single database for all repos
+SESSION_DB_PATH = Path.home() / "Developer" / "claude-session-db" / "edits.db"
 
 
-def get_db_path(repo_name: str) -> Path:
+def get_db_path() -> Path:
     """
-    Get database path for a repository
-
-    Args:
-        repo_name: Name of the repository (e.g., 'synodic-hooks')
+    Get path to the single shared database
 
     Returns:
         Path to SQLite database
     """
-    SESSION_DB_DIR.mkdir(parents=True, exist_ok=True)
-    return SESSION_DB_DIR / f"{repo_name}.db"
+    SESSION_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    return SESSION_DB_PATH
 
 
 def create_schema(conn: sqlite3.Connection) -> None:
@@ -85,7 +82,6 @@ def get_repo_name(git_root: Path) -> str:
 
 
 def log_edit_to_sqlite(
-    repo_name: str,
     repo_path: str,
     branch: str,
     file_path: str,
@@ -98,7 +94,6 @@ def log_edit_to_sqlite(
     Log an edit to the SQLite database
 
     Args:
-        repo_name: Repository name (for database file)
         repo_path: Full path to repository
         branch: Current git branch
         file_path: Path to file being edited
@@ -111,7 +106,7 @@ def log_edit_to_sqlite(
         True if logged successfully, False otherwise
     """
     try:
-        db_path = get_db_path(repo_name)
+        db_path = get_db_path()
         conn = sqlite3.connect(str(db_path))
 
         create_schema(conn)
@@ -145,18 +140,15 @@ def log_edit_to_sqlite(
         return False
 
 
-def get_stats(repo_name: str) -> dict:
+def get_stats() -> dict:
     """
-    Get statistics for a repository's session database
-
-    Args:
-        repo_name: Repository name
+    Get statistics for the session database
 
     Returns:
         Dict with edit count
     """
     try:
-        db_path = get_db_path(repo_name)
+        db_path = get_db_path()
         if not db_path.exists():
             return {"edits": 0, "exists": False}
 
@@ -177,20 +169,16 @@ def run_test() -> None:
     """
     Test the SQLite logger with sample data
     """
-    print("Testing SQLite Session Logger (flat schema)")
+    print("Testing SQLite Session Logger (single database)")
     print("=" * 60)
 
-    # Test repo name
-    test_repo = "sqlite-logger-test"
-
-    print(f"Database directory: {SESSION_DB_DIR}")
-    print(f"Test repo: {test_repo}")
+    db_path = get_db_path()
+    print(f"Database: {db_path}")
     print()
 
     # Log a test edit
     print("Logging test edit...")
     success = log_edit_to_sqlite(
-        repo_name=test_repo,
         repo_path="/tmp/test-repo",
         branch="main",
         file_path="/tmp/test-repo/src/main.py",
@@ -206,13 +194,12 @@ def run_test() -> None:
         print("  FAILED to log edit")
         return
 
-    # Log another edit
-    print("Logging second test edit...")
+    # Log another edit from different repo
+    print("Logging edit from different repo...")
     success = log_edit_to_sqlite(
-        repo_name=test_repo,
-        repo_path="/tmp/test-repo",
-        branch="main",
-        file_path="/tmp/test-repo/src/utils.py",
+        repo_path="/tmp/other-repo",
+        branch="develop",
+        file_path="/tmp/other-repo/src/utils.py",
         change_type="feature",
         user_prompt="Add utility function",
         old_content="",
@@ -227,33 +214,28 @@ def run_test() -> None:
     # Get stats
     print()
     print("Database stats:")
-    stats = get_stats(test_repo)
-    print(f"  Edits: {stats['edits']}")
+    stats = get_stats()
+    print(f"  Total edits: {stats['edits']}")
 
-    # Show database path
-    db_path = get_db_path(test_repo)
     print()
-    print(f"Database file: {db_path}")
     print(f"File size: {db_path.stat().st_size} bytes")
 
     # Query to show the edits
     print()
-    print("Edits in database:")
+    print("Recent edits:")
     conn = sqlite3.connect(str(db_path))
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT timestamp, file_path, branch, change_type FROM edits ORDER BY timestamp"
+        "SELECT timestamp, repo, branch, change_type FROM edits ORDER BY timestamp DESC LIMIT 5"
     )
     for row in cursor.fetchall():
-        print(f"  {row[0][:19]} | {row[2]} | {row[1][-30:]} | {row[3]}")
+        repo_name = Path(row[1]).name if row[1] else "unknown"
+        print(f"  {row[0][:19]} | {repo_name} | {row[2]} | {row[3]}")
     conn.close()
 
     print()
     print("=" * 60)
     print("Test completed successfully!")
-    print()
-    print("To clean up test database:")
-    print(f"  rm {db_path}")
 
 
 if __name__ == "__main__":

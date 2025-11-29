@@ -329,17 +329,18 @@ def log_file_edit(hook_data: dict) -> None:
 
         if git_root:
             # Per-repo session logging
-            session_id = get_or_create_session_id(git_root)
+            # Store as yaml_session_id to avoid overwrite by hook_data session_id later
+            yaml_session_id = get_or_create_session_id(git_root)
             sessions_dir = git_root / ".claude" / "sessions"
             sessions_dir.mkdir(parents=True, exist_ok=True)
 
             # Session file format: YYYYMMDD-HHMMSS.yml
-            session_filename = session_id.replace("claude-", "") + ".yml"
+            session_filename = yaml_session_id.replace("claude-", "") + ".yml"
             log_file = sessions_dir / session_filename
 
             # Create session file with metadata if new
             if not log_file.exists():
-                metadata = get_session_metadata(git_root, session_id)
+                metadata = get_session_metadata(git_root, yaml_session_id)
                 write_session_metadata(log_file, metadata)
         else:
             # Fallback to global log
@@ -412,13 +413,14 @@ def log_file_edit(hook_data: dict) -> None:
         # SQLite logging (parallel with YAML during transition)
         if SQLITE_LOGGING_AVAILABLE and git_root:
             try:
-                # Convert session_id (claude-YYYYMMDD-HHMMSS) to ISO timestamp
-                # e.g., claude-20251128-182205 -> 2025-11-28T18:22:05
-                ts_part = session_id.replace("claude-", "")
-                started_at = (
-                    f"{ts_part[:4]}-{ts_part[4:6]}-{ts_part[6:8]}T"
-                    f"{ts_part[9:11]}:{ts_part[11:13]}:{ts_part[13:15]}"
-                )
+                # Use mtime of current_session file as session start time
+                session_file = git_root / ".claude" / "current_session"
+                if session_file.exists():
+                    started_at = datetime.fromtimestamp(
+                        session_file.stat().st_mtime
+                    ).isoformat()
+                else:
+                    started_at = datetime.now().isoformat()
 
                 # Get branch for SQLite logging
                 branch = get_current_branch(str(git_root))

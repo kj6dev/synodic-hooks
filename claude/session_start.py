@@ -5,11 +5,8 @@ SessionStart Hook for Claude Code
 Runs when a Claude Code session starts or resumes.
 
 Responsibilities:
-1. Sync CLAUDE.md template to .claude/sessions/ directories
-2. Sync .gitattributes rule for session files (collapses in GitHub PRs)
-3. Check for uncommitted session files from previous work
-4. Clean up empty claude/* branches
-5. Provide session context to user
+1. Clean up empty claude/* branches
+2. Provide session context to user
 
 NOTE: Auto-branch creation is DISABLED. Claude must explicitly create
 branches with meaningful names to prevent work accumulation on long-lived
@@ -29,13 +26,10 @@ from shared.git import is_git_repo_root
 from shared.hook_utils import format_hook_error, get_hook_data
 
 from session import (
-    check_uncommitted_session_files,
     cleanup_empty_branches,
     create_session_branch,
     report_session_context,
     should_auto_create_branch,
-    sync_gitattributes_rule,
-    sync_sessions_claude_md,
 )
 
 
@@ -58,23 +52,14 @@ def main():
             # Not in git repo - nothing to do
             sys.exit(0)
 
-        # 1. Sync CLAUDE.md template to .claude/sessions/
-        sync_sessions_claude_md(cwd)
-
-        # 2. Sync .gitattributes rule for session files
-        sync_gitattributes_rule(cwd)
-
-        # 3. Check for uncommitted session files from previous work
-        check_uncommitted_session_files(cwd)
-
-        # 4. Clean up empty branches from previous sessions
+        # 1. Clean up empty branches from previous sessions
         cleanup_empty_branches(cwd)
 
-        # 5. Create new session branch if appropriate
+        # 2. Create new session branch if appropriate
         if should_auto_create_branch(cwd):
             create_session_branch(cwd)
 
-        # 6. Report context
+        # 3. Report context
         report_session_context(cwd)
 
         # Always succeed

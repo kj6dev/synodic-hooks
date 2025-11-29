@@ -1,3 +1,0 @@
-# Session files are valuable for historical context but should be
-# collapsed in GitHub PR views to reduce noise in code reviews
-.claude/sessions/*.yml linguist-generated=true

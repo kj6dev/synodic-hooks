@@ -21,7 +21,6 @@ import re
 import shlex
 import subprocess
 import sys
-from datetime import datetime
 from pathlib import Path
 
 # Add parent directory to path for imports (resolve symlinks first)
@@ -38,6 +37,34 @@ from shared.hook_utils import (
     get_tool_input,
     get_tool_name,
 )
+
+# SQLite session logging
+try:
+    # Direct import from file path (avoids needing __init__.py package structure)
+    import importlib.util
+
+    _sqlite_path = Path(__file__).resolve().parent / "session" / "sqlite_logger.py"
+    _spec = importlib.util.spec_from_file_location("sqlite_logger", _sqlite_path)
+    _sqlite_module = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_sqlite_module)
+    log_edit_to_sqlite = _sqlite_module.log_edit_to_sqlite
+
+    SQLITE_LOGGING_AVAILABLE = True
+except Exception as e:
+    # Loud failure - SQLite logging is critical
+    import traceback
+
+    print("🚨" * 20, file=sys.stderr)
+    print("🚨 SQLITE LOGGER IMPORT FAILED", file=sys.stderr)
+    print("🚨" * 20, file=sys.stderr)
+    print(f"🚨 Error: {type(e).__name__}: {e}", file=sys.stderr)
+    print("🚨", file=sys.stderr)
+    print("🚨 Edit logging will NOT work this session!", file=sys.stderr)
+    print("🚨 Fix the sqlite_logger.py module.", file=sys.stderr)
+    print("🚨", file=sys.stderr)
+    traceback.print_exc(file=sys.stderr)
+    print("🚨" * 20, file=sys.stderr)
+    SQLITE_LOGGING_AVAILABLE = False
 
 
 def should_log_edit(file_path: str, old_string: str, new_string: str) -> bool:
@@ -136,98 +163,6 @@ def find_git_root(cwd: str) -> Path | None:
     return None
 
 
-def get_or_create_session_id(git_root: Path) -> str:
-    """
-    Get current session ID or create a new one
-
-    Session ID format: claude-YYYYMMDD-HHMMSS
-    Stored in .claude/current_session
-
-    Args:
-        git_root: Path to git repository root
-
-    Returns:
-        Session ID string
-    """
-    claude_dir = git_root / ".claude"
-    session_file = claude_dir / "current_session"
-
-    # Check if session file exists and is recent (< 4 hours old)
-    if session_file.exists():
-        try:
-            session_id = session_file.read_text().strip()
-            # Parse timestamp from session ID
-            timestamp_str = session_id.replace("claude-", "")
-            # Simple heuristic: if file modified < 4 hours ago, reuse session
-            mtime = session_file.stat().st_mtime
-            import time
-
-            if (time.time() - mtime) < (4 * 3600):
-                return session_id
-        except Exception:
-            pass
-
-    # Create new session ID
-    session_id = datetime.now().strftime("claude-%Y%m%d-%H%M%S")
-
-    # Write to file
-    claude_dir.mkdir(exist_ok=True)
-    session_file.write_text(session_id)
-
-    return session_id
-
-
-def get_session_metadata(git_root: Path, session_id: str) -> dict:
-    """
-    Get or create session metadata
-
-    Args:
-        git_root: Path to git repository root
-        session_id: Current session ID
-
-    Returns:
-        Dict with session metadata
-    """
-    try:
-        # Get current branch
-        result = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            capture_output=True,
-            text=True,
-            cwd=str(git_root),
-            timeout=5,
-        )
-        branch = result.stdout.strip() if result.returncode == 0 else "unknown"
-    except Exception:
-        branch = "unknown"
-
-    return {
-        "session_id": session_id,
-        "started": datetime.now().isoformat(),
-        "repo": str(git_root),
-        "branch": branch,
-    }
-
-
-def write_session_metadata(session_file: Path, metadata: dict) -> None:
-    """
-    Write session metadata to the beginning of session file
-
-    Args:
-        session_file: Path to session file
-        metadata: Session metadata dict
-    """
-    with session_file.open("w") as f:
-        f.write("---\n")
-        f.write("# Session Metadata\n")
-        f.write(f"session_id: {metadata['session_id']}\n")
-        f.write(f"started: {metadata['started']}\n")
-        f.write(f"repo: {metadata['repo']}\n")
-        f.write(f"branch: {metadata['branch']}\n")
-        f.write("edit_count: 0\n")
-        f.write("---\n\n")
-
-
 def classify_change_type(
     user_prompt: str, file_path: str, old_code: str, new_code: str
 ) -> str:
@@ -292,14 +227,16 @@ def classify_change_type(
 
 def log_file_edit(hook_data: dict) -> None:
     """
-    Log file edits to per-repo session YAML files for pattern analysis
+    Log file edits to SQLite database for pattern analysis
 
     Behavior:
-    - Phase 1: Logs ALL text file edits to per-repo session files
-    - Phase 1: Implements filtering (size limits, exclude patterns)
-    - Phase 1: Adds session metadata (session_id, repo, branch)
-    - Phase 4: Adds change type classification
+    - Logs ALL text file edits to central SQLite database
+    - Implements filtering (size limits, exclude patterns)
+    - Adds change type classification
     """
+    if not SQLITE_LOGGING_AVAILABLE:
+        return
+
     try:
         tool_name = get_tool_name(hook_data)
         if tool_name != "Edit":
@@ -315,28 +252,11 @@ def log_file_edit(hook_data: dict) -> None:
             return
 
         # Detect if the file being edited is in a git repo
-        # Use the file's directory, not the current working directory
         file_dir = str(Path(file_path).parent)
         git_root = find_git_root(file_dir)
 
-        if git_root:
-            # Per-repo session logging
-            session_id = get_or_create_session_id(git_root)
-            sessions_dir = git_root / ".claude" / "sessions"
-            sessions_dir.mkdir(parents=True, exist_ok=True)
-
-            # Session file format: YYYYMMDD-HHMMSS.yml
-            session_filename = session_id.replace("claude-", "") + ".yml"
-            log_file = sessions_dir / session_filename
-
-            # Create session file with metadata if new
-            if not log_file.exists():
-                metadata = get_session_metadata(git_root, session_id)
-                write_session_metadata(log_file, metadata)
-        else:
-            # Fallback to global log
-            log_file = Path.home() / "Developer" / "swift-edits.yml"
-            log_file.parent.mkdir(exist_ok=True)
+        if not git_root:
+            return  # Only log edits in git repos
 
         # Get user prompt from session-specific cache (primary method)
         user_prompt = ""
@@ -358,16 +278,13 @@ def log_file_edit(hook_data: dict) -> None:
                 try:
                     transcript_file = Path(transcript_path)
                     if transcript_file.exists():
-                        # Read last ~50 lines to find most recent user message
                         with transcript_file.open("r") as f:
                             lines = f.readlines()
-                            # Search backwards for user message
                             for line in reversed(lines[-50:]):
                                 try:
                                     entry = json.loads(line)
                                     message = entry.get("message", {})
                                     if message.get("role") == "user":
-                                        # Get text content from user message
                                         content = message.get("content", "")
                                         if isinstance(content, str):
                                             user_prompt = content
@@ -377,32 +294,38 @@ def log_file_edit(hook_data: dict) -> None:
                 except Exception:
                     pass
 
-        # Classify change type (Phase 4)
+        # Classify change type
         change_type = classify_change_type(
             user_prompt, file_path, old_string, new_string
         )
 
-        # Write YAML entry (append to session file)
-        with log_file.open("a") as f:
-            f.write("---\n")
-            f.write(f"# Edit {datetime.now().isoformat()}\n")
-            f.write(f"time: {datetime.now().isoformat()}\n")
-            f.write(f"file: {file_path}\n")
-            f.write(f"change_type: {change_type}\n")
-            if user_prompt:
-                f.write("user_prompt: |\n")
-                for line in user_prompt.splitlines():
-                    f.write(f"  {line}\n")
-            f.write("old: |\n")
-            for line in old_string.splitlines():
-                f.write(f"  {line}\n")
-            f.write("new: |\n")
-            for line in new_string.splitlines():
-                f.write(f"  {line}\n")
-            f.write("\n")
-    except Exception:
-        # Silent failure - don't block workflow for logging errors
-        pass
+        # Log to SQLite
+        success = log_edit_to_sqlite(
+            repo_path=str(git_root),
+            branch=get_current_branch(str(git_root)),
+            file_path=file_path,
+            change_type=change_type,
+            user_prompt=user_prompt,
+            old_content=old_string,
+            new_content=new_string,
+        )
+        if not success:
+            # log_edit_to_sqlite already printed loud error
+            pass
+    except Exception as e:
+        # Loud failure - logging errors need attention
+        import traceback
+
+        print("🚨" * 20, file=sys.stderr)
+        print("🚨 EDIT LOGGING FAILED (outer handler)", file=sys.stderr)
+        print("🚨" * 20, file=sys.stderr)
+        print(f"🚨 Error: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"🚨 File: {file_path}", file=sys.stderr)
+        print("🚨", file=sys.stderr)
+        print("🚨 This edit was NOT logged to SQLite!", file=sys.stderr)
+        print("🚨", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        print("🚨" * 20, file=sys.stderr)
 
 
 def is_git_commit_command(command: str) -> bool:
@@ -912,7 +835,7 @@ def validate_git_push(command: str, cwd: str) -> tuple[bool, str]:
             return False, "Not in a git repository or detached HEAD state"
 
         # Block pushes to protected branches
-        protected_branches = ["main", "master", "production", "prod"]
+        protected_branches = ["main", "master", "develop", "production", "prod"]
 
         if target_branch in protected_branches:
             reason = (

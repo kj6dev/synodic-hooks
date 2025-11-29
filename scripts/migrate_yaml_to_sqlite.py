@@ -6,17 +6,21 @@ Handles:
 - Multi-document YAML files (session metadata + edits)
 - Malformed YAML from merge conflicts
 - Tracks failures for manual review
+- Deduplication by timestamp
 
 Usage:
     python scripts/migrate_yaml_to_sqlite.py [--dry-run]
+    python scripts/migrate_yaml_to_sqlite.py --sessions-dir .claude/sessions/
 """
 
 import argparse
 import re
 import sqlite3
 import sys
-from datetime import datetime
 from pathlib import Path
+
+# Central database location
+DB_PATH = Path.home() / "Developer" / "claude-session-db" / "edits.db"
 
 # Try to import yaml, provide helpful error if missing
 try:
@@ -29,36 +33,21 @@ except ImportError:
 
 
 def create_schema(conn: sqlite3.Connection) -> None:
-    """Create database schema if it doesn't exist"""
+    """Create database schema if it doesn't exist (flat schema)"""
     cursor = conn.cursor()
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS sessions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id TEXT UNIQUE NOT NULL,
-        started_at TEXT NOT NULL,
-        repo TEXT NOT NULL,
-        branch TEXT,
-        edit_count INTEGER DEFAULT 0
-    )
-    """)
 
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS edits (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id TEXT NOT NULL,
         timestamp TEXT NOT NULL,
+        repo TEXT NOT NULL,
+        branch TEXT,
         file_path TEXT NOT NULL,
         change_type TEXT,
         user_prompt TEXT,
         old_content TEXT,
-        new_content TEXT,
-        FOREIGN KEY (session_id) REFERENCES sessions(session_id)
+        new_content TEXT
     )
-    """)
-
-    cursor.execute("""
-    CREATE INDEX IF NOT EXISTS idx_edits_session ON edits(session_id)
     """)
 
     cursor.execute("""
@@ -67,6 +56,10 @@ def create_schema(conn: sqlite3.Connection) -> None:
 
     cursor.execute("""
     CREATE INDEX IF NOT EXISTS idx_edits_timestamp ON edits(timestamp)
+    """)
+
+    cursor.execute("""
+    CREATE INDEX IF NOT EXISTS idx_edits_repo ON edits(repo)
     """)
 
     conn.commit()
@@ -172,11 +165,18 @@ def parse_yaml_documents(content: str) -> list[dict]:
     return documents
 
 
+def get_existing_timestamps(conn: sqlite3.Connection, repo: str) -> set[str]:
+    """Get all existing timestamps for a repo to avoid duplicates."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT timestamp FROM edits WHERE repo = ?", (repo,))
+    return {row[0] for row in cursor.fetchall()}
+
+
 def migrate_file(
     yaml_path: Path, conn: sqlite3.Connection, dry_run: bool = False
-) -> tuple[int, int, int, list[str]]:
+) -> tuple[int, int, int, int, list[str]]:
     """
-    Migrate a single YAML file to SQLite
+    Migrate a single YAML file to SQLite (flat schema)
 
     Args:
         yaml_path: Path to YAML file
@@ -184,50 +184,32 @@ def migrate_file(
         dry_run: If True, don't actually insert
 
     Returns:
-        Tuple of (edits_migrated, edits_recovered, edits_failed, error_messages)
+        Tuple of (edits_migrated, edits_recovered, edits_skipped, edits_failed, error_messages)
     """
     cursor = conn.cursor()
     edits_migrated = 0
     edits_recovered = 0
+    edits_skipped = 0
     edits_failed = 0
     errors = []
 
     try:
         content = yaml_path.read_text()
     except Exception as e:
-        return 0, 0, 0, [f"Could not read file: {e}"]
+        return 0, 0, 0, 0, [f"Could not read file: {e}"]
 
     documents = parse_yaml_documents(content)
 
     if not documents:
-        return 0, 0, 0, ["No valid documents found"]
+        return 0, 0, 0, 0, ["No valid documents found"]
 
     # First document should be session metadata
     session_doc = documents[0]
-    session_id = session_doc.get("session_id", "")
+    repo = session_doc.get("repo", "unknown")
+    branch = session_doc.get("branch", "")
 
-    if not session_id:
-        # Try to derive from filename
-        session_id = f"claude-{yaml_path.stem}"
-
-    # Insert session if not exists
-    if not dry_run:
-        try:
-            cursor.execute(
-                """
-            INSERT OR IGNORE INTO sessions (session_id, started_at, repo, branch, edit_count)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-                (
-                    session_id,
-                    session_doc.get("started", datetime.now().isoformat()),
-                    session_doc.get("repo", "unknown"),
-                    session_doc.get("branch", ""),
-                    session_doc.get("edit_count", 0),
-                ),
-            )
-        except Exception as e:
-            errors.append(f"Session insert error: {e}")
+    # Get existing timestamps for deduplication
+    existing_timestamps = get_existing_timestamps(conn, repo)
 
     # Process edit documents
     for doc in documents[1:]:
@@ -240,6 +222,13 @@ def migrate_file(
         if "file" not in doc and "time" not in doc:
             continue
 
+        timestamp = doc.get("time", "")
+
+        # Skip duplicates
+        if timestamp in existing_timestamps:
+            edits_skipped += 1
+            continue
+
         # Track if this was recovered via regex fallback
         is_recovered = doc.get("_recovered", False)
 
@@ -247,12 +236,13 @@ def migrate_file(
             try:
                 cursor.execute(
                     """
-                INSERT INTO edits (session_id, timestamp, file_path, change_type, user_prompt, old_content, new_content)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO edits (timestamp, repo, branch, file_path, change_type, user_prompt, old_content, new_content)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
-                        session_id,
-                        doc.get("time", ""),
+                        timestamp,
+                        repo,
+                        branch,
                         doc.get("file", ""),
                         doc.get("change_type", ""),
                         doc.get("user_prompt", ""),
@@ -260,6 +250,7 @@ def migrate_file(
                         doc.get("new", ""),
                     ),
                 )
+                existing_timestamps.add(timestamp)  # Track for dedup within file
                 if is_recovered:
                     edits_recovered += 1
                 else:
@@ -276,7 +267,7 @@ def migrate_file(
     if not dry_run:
         conn.commit()
 
-    return edits_migrated, edits_recovered, edits_failed, errors
+    return edits_migrated, edits_recovered, edits_skipped, edits_failed, errors
 
 
 def main():
@@ -287,12 +278,6 @@ def main():
         type=Path,
         default=Path(".claude/sessions"),
         help="Path to sessions directory",
-    )
-    parser.add_argument(
-        "--db-path",
-        type=Path,
-        default=Path(".claude/sessions.db"),
-        help="Path to SQLite database",
     )
     args = parser.parse_args()
 
@@ -306,7 +291,7 @@ def main():
         sys.exit(0)
 
     print(f"Found {len(yaml_files)} YAML files")
-    print(f"Database: {args.db_path}")
+    print(f"Database: {DB_PATH}")
     print(f"Dry run: {args.dry_run}")
     print()
 
@@ -314,28 +299,32 @@ def main():
     if args.dry_run:
         conn = sqlite3.connect(":memory:")
     else:
-        args.db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(args.db_path)
+        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(DB_PATH))
 
     create_schema(conn)
 
     total_migrated = 0
     total_recovered = 0
+    total_skipped = 0
     total_failed = 0
     all_errors = []
 
     for yaml_path in sorted(yaml_files):
         print(f"Processing: {yaml_path.name}...", end=" ")
-        migrated, recovered, failed, errors = migrate_file(
+        migrated, recovered, skipped, failed, errors = migrate_file(
             yaml_path, conn, args.dry_run
         )
         total_migrated += migrated
         total_recovered += recovered
+        total_skipped += skipped
         total_failed += failed
 
         parts = [f"✓ {migrated} edits"]
         if recovered:
             parts.append(f"🔧 {recovered} recovered")
+        if skipped:
+            parts.append(f"⏭ {skipped} skipped")
         if failed:
             parts.append(f"⚠ {failed} failed")
         print(", ".join(parts))
@@ -352,6 +341,8 @@ def main():
         print(
             f"Total edits recovered: {total_recovered} (metadata only, code content lost)"
         )
+    if total_skipped:
+        print(f"Total edits skipped (duplicates): {total_skipped}")
     print(f"Total edits failed: {total_failed}")
 
     if all_errors:
@@ -360,8 +351,8 @@ def main():
         for filename, error in all_errors:
             print(f"  {filename}: {error[:100]}")
 
-    if not args.dry_run and args.db_path.exists():
-        size_kb = args.db_path.stat().st_size / 1024
+    if not args.dry_run and DB_PATH.exists():
+        size_kb = DB_PATH.stat().st_size / 1024
         print()
         print(f"Database size: {size_kb:.1f} KB")
 

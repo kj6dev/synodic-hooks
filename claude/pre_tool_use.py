@@ -39,6 +39,14 @@ from shared.hook_utils import (
     get_tool_name,
 )
 
+# SQLite session logging (parallel with YAML during transition)
+try:
+    from claude.session.sqlite_logger import log_edit_to_sqlite, get_repo_name
+
+    SQLITE_LOGGING_AVAILABLE = True
+except ImportError:
+    SQLITE_LOGGING_AVAILABLE = False
+
 
 def should_log_edit(file_path: str, old_string: str, new_string: str) -> bool:
     """
@@ -400,6 +408,35 @@ def log_file_edit(hook_data: dict) -> None:
             for line in new_string.splitlines():
                 f.write(f"  {line}\n")
             f.write("\n")
+
+        # SQLite logging (parallel with YAML during transition)
+        if SQLITE_LOGGING_AVAILABLE and git_root:
+            try:
+                # Convert session_id (claude-YYYYMMDD-HHMMSS) to ISO timestamp
+                # e.g., claude-20251128-182205 -> 2025-11-28T18:22:05
+                ts_part = session_id.replace("claude-", "")
+                started_at = (
+                    f"{ts_part[:4]}-{ts_part[4:6]}-{ts_part[6:8]}T"
+                    f"{ts_part[9:11]}:{ts_part[11:13]}:{ts_part[13:15]}"
+                )
+
+                # Get branch for SQLite logging
+                branch = get_current_branch(str(git_root))
+
+                log_edit_to_sqlite(
+                    repo_name=get_repo_name(git_root),
+                    session_started_at=started_at,
+                    repo_path=str(git_root),
+                    branch=branch,
+                    file_path=file_path,
+                    change_type=change_type,
+                    user_prompt=user_prompt,
+                    old_content=old_string,
+                    new_content=new_string,
+                )
+            except Exception:
+                # Silent failure - don't block workflow for SQLite logging errors
+                pass
     except Exception:
         # Silent failure - don't block workflow for logging errors
         pass

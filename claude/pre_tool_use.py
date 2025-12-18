@@ -106,7 +106,6 @@ def should_log_edit(file_path: str, old_string: str, new_string: str) -> bool:
     exclude_patterns = [
         # Session files (prevent infinite loop when committing)
         ".claude/sessions/",
-        ".claude/current_session",
         # Lock files
         ".lock",
         "package-lock.json",

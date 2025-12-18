@@ -5,8 +5,9 @@ SessionStart Hook for Claude Code
 Runs when a Claude Code session starts or resumes.
 
 Responsibilities:
-1. Clean up empty claude/* branches
-2. Provide session context to user
+1. Show high-level planning reminder
+2. Clean up empty claude/* branches
+3. Provide session context to user
 
 NOTE: Auto-branch creation is DISABLED. Claude must explicitly create
 branches with meaningful names to prevent work accumulation on long-lived
@@ -32,6 +33,23 @@ from session import (
     should_auto_create_branch,
 )
 
+# High-level planning database
+PLANNING_DB = Path.home() / "Developer" / ".beads" / "beads.db"
+
+
+def show_planning_reminder() -> None:
+    """
+    Show reminder about high-level cross-project planning.
+    Runs every session to keep planning top of mind.
+    """
+    if not PLANNING_DB.exists():
+        return
+
+    print("📋 Cross-project planning: ~/Developer/synodic-planning", file=sys.stderr)
+    print("   Create:  bd --db ~/Developer/.beads/beads.db create \"...\"", file=sys.stderr)
+    print("   View:    bd --db ~/Developer/.beads/beads.db ready", file=sys.stderr)
+    print("   Link:    bd dep add <local> <Developer-xxx> --type related", file=sys.stderr)
+
 
 def main():
     """
@@ -47,19 +65,22 @@ def main():
         hook_data = get_hook_data()
         cwd = hook_data.get("cwd", os.getcwd())
 
-        # Only proceed if in a git repository
+        # 1. Show planning reminder (always, regardless of git status)
+        show_planning_reminder()
+
+        # Only proceed with git operations if in a git repository
         if not is_git_repo_root(cwd):
-            # Not in git repo - nothing to do
+            # Not in git repo - done
             sys.exit(0)
 
-        # 1. Clean up empty branches from previous sessions
+        # 2. Clean up empty branches from previous sessions
         cleanup_empty_branches(cwd)
 
-        # 2. Create new session branch if appropriate
+        # 3. Create new session branch if appropriate
         if should_auto_create_branch(cwd):
             create_session_branch(cwd)
 
-        # 3. Report context
+        # 4. Report context
         report_session_context(cwd)
 
         # Always succeed

@@ -525,6 +525,13 @@ def validate_git_commit(command: str, cwd: str) -> tuple[bool, str]:
         - reason: Explanation for decision
     """
     try:
+        # Exempt repos that are allowed to commit to any branch
+        # (infrastructure repos maintained by hooks, not feature work)
+        exempt_repos = ["claude-session-db"]
+        cwd_path = Path(cwd).resolve()
+        if cwd_path.name in exempt_repos:
+            return True, f"✅ Exempt repo ({cwd_path.name}) - branch protection skipped"
+
         # Get current branch
         current_branch = get_current_branch(cwd)
 
@@ -824,6 +831,13 @@ def validate_git_push(command: str, cwd: str) -> tuple[bool, str]:
         - reason: Explanation for decision
     """
     try:
+        # Exempt repos that are allowed to push to any branch
+        # (infrastructure repos maintained by hooks, not feature work)
+        exempt_repos = ["claude-session-db"]
+        cwd_path = Path(cwd).resolve()
+        if cwd_path.name in exempt_repos:
+            return True, f"✅ Exempt repo ({cwd_path.name}) - push protection skipped"
+
         # Extract target branch from command
         target_branch = extract_push_target_branch(command)
 

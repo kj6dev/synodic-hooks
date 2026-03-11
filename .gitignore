@@ -22,3 +22,9 @@ Thumbs.db
 
 # Test artifacts
 .test_repos/
+
+# Claude Code runtime cache
+.claude/sessions/
+.claude/current_session
+.claude/index.json
+.claude/settings.local.json

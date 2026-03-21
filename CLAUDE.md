@@ -318,7 +318,7 @@ Captures ALL file edits (not just Swift) with user intent for future pattern ana
 # Session Metadata
 session_id: claude-20251116-105715
 started: 2025-11-16T10:57:15.123456
-repo: /Users/bryancostanza/Developer/synodic-hooks
+repo: ~/Developer/synodic-hooks
 branch: claude/feature-name
 edit_count: 0
 ---

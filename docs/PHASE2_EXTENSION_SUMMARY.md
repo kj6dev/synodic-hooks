@@ -272,7 +272,7 @@ Tests/
 5. `Sources/CustomRules/ImportRules.swift`
 6. `Sources/CustomRules/PreviewRules.swift`
 7. `Sources/main.swift`
-8. `/Users/bryancostanza/Developer/synodic-hooks/docs/PHASE2_EXTENSION_SUMMARY.md` (this file)
+8. `~/Developer/synodic-hooks/docs/PHASE2_EXTENSION_SUMMARY.md` (this file)
 
 ### Modified:
 1. `Package.swift` - Updated for modular structure

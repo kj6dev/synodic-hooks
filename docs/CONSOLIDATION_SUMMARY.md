@@ -200,19 +200,19 @@ Based on CLAUDE-SWIFT.md and swift-edits.yml analysis:
 
 ## Files Created This Session
 
-1. `/Users/bryancostanza/Developer/synodic-hooks/docs/SWIFT_QUALITY_CONSOLIDATION.md`
+1. `~/Developer/synodic-hooks/docs/SWIFT_QUALITY_CONSOLIDATION.md`
    - Complete classification framework
    - Tool allocation strategy
    - Migration plan with phases
    - Real-world pattern examples
 
-2. `/Users/bryancostanza/.claude/commands/sc-classify-swift-rule.md`
+2. `~/.claude/commands/sc-classify-swift-rule.md`
    - Classification command for future decisions
    - Decision tree reference
    - Tool capabilities summary
    - Output format specification
 
-3. `/Users/bryancostanza/Developer/synodic-hooks/docs/CONSOLIDATION_SUMMARY.md`
+3. `~/Developer/synodic-hooks/docs/CONSOLIDATION_SUMMARY.md`
    - This file - executive summary
    - Next steps and questions
    - Quick reference guide

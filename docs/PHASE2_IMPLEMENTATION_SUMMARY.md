@@ -9,7 +9,7 @@
 
 ### 1. Four New SwiftSyntax Rules
 
-All implemented in `/Users/bryancostanza/Developer/swift-quality-tools/CustomRules/swiftlint-swiftsyntax-integration/rule-engine/test-custom-rule.swift`:
+All implemented in `~/Developer/swift-quality-tools/CustomRules/swiftlint-swiftsyntax-integration/rule-engine/test-custom-rule.swift`:
 
 #### ✅ `view_structure_order`
 - **Purpose**: Enforce View property ordering (embedded types → env props → other props → init → body → computed)
@@ -173,26 +173,26 @@ Based on consolidation plan:
 
 ## Files Modified
 
-1. `/Users/bryancostanza/Developer/swift-quality-tools/CustomRules/swiftlint-swiftsyntax-integration/rule-engine/test-custom-rule.swift`
+1. `~/Developer/swift-quality-tools/CustomRules/swiftlint-swiftsyntax-integration/rule-engine/test-custom-rule.swift`
    - Added 4 new rules
    - Added visitor hooks for new AST nodes
    - Extended CustomRulesVisitor class
 
-2. `/Users/bryancostanza/Developer/swift-quality-tools/CustomRules/swiftlint-swiftsyntax-integration/SWIFTSYNTAX_RULES.md`
+2. `~/Developer/swift-quality-tools/CustomRules/swiftlint-swiftsyntax-integration/SWIFTSYNTAX_RULES.md`
    - Complete rewrite with all 8 rules
    - Examples and fixes for each rule
    - Rule identifier reference
 
-3. `/Users/bryancostanza/Developer/synodic-hooks/docs/SWIFT_QUALITY_CONSOLIDATION.md`
+3. `~/Developer/synodic-hooks/docs/SWIFT_QUALITY_CONSOLIDATION.md`
    - Created comprehensive strategy
 
-4. `/Users/bryancostanza/.claude/commands/sc-classify-swift-rule.md`
+4. `~/.claude/commands/sc-classify-swift-rule.md`
    - Created classification command
 
-5. `/Users/bryancostanza/Developer/synodic-hooks/docs/CONSOLIDATION_SUMMARY.md`
+5. `~/Developer/synodic-hooks/docs/CONSOLIDATION_SUMMARY.md`
    - Created executive summary
 
-6. `/Users/bryancostanza/Developer/synodic-hooks/docs/PHASE2_IMPLEMENTATION_SUMMARY.md`
+6. `~/Developer/synodic-hooks/docs/PHASE2_IMPLEMENTATION_SUMMARY.md`
    - This file
 
 ## Commit Recommendation
